@@ -1,0 +1,152 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Gallery from "../components/Gallery.astro";
+import HomeButton from "@/components/HomeButton.astro";
+import Nav from "@/components/Nav.astro";
+
+import sg1 from "../assets/galleryphotos/sg1.JPG";
+import sg2 from "../assets/galleryphotos/sg2.JPG";
+import sg3 from "../assets/galleryphotos/sg3.JPG";
+import jp1 from "../assets/galleryphotos/jp1.JPG";
+import jp2 from "../assets/galleryphotos/jp2.JPG";
+import jp3 from "../assets/galleryphotos/jp3.JPG";
+import jp4 from "../assets/galleryphotos/jp4.JPG";
+import hk1 from "../assets/galleryphotos/hk1.JPG";
+import hk2 from "../assets/galleryphotos/hk2.JPG";
+import hk3 from "../assets/galleryphotos/hk3.JPG";
+import banff1 from "../assets/galleryphotos/banff1.JPG";
+import banff2 from "../assets/galleryphotos/banff2.JPG";
+import banff3 from "../assets/galleryphotos/banff3.JPG";
+import banff4 from "../assets/galleryphotos/banff4.JPG";
+
+const pictures = {
+	Singapore: [
+		{ src: sg1, alt: "happy" },
+		{ src: sg2, alt: "school (NTU)" },
+		{ src: sg3, alt: "spirited away" },
+	],
+	Japan: [
+		{ src: jp1, alt: "cat island" },
+		{ src: jp2, alt: "dont tell anyone" },
+		{ src: jp3, alt: "power" },
+		{ src: jp4, alt: "serene" },
+	],
+	HK: [
+		{ src: hk1, alt: "woah" },
+		{ src: hk2, alt: "0_0" },
+		{ src: hk3, alt: "bird" },
+	],
+	Banff: [
+		{ src: banff1, alt: "couple" },
+		{ src: banff2, alt: "i can take you" },
+		{ src: banff3, alt: "watch your step" },
+		{ src: banff4, alt: "" },
+	],
+};
+---
+
+<BaseLayout
+	title="Gallery | Amjad Yaghi"
+	description="Photos from places I've been"
+>
+	<section class="bg-primary">
+		<div
+			class="px-8 2xl:max-w-7xl mx-auto"
+			data-aos="fade-up"
+			data-aos-duration="2000"
+		>
+		</div>
+		<div class="px-8 2xl:max-w-7xl mx-auto pb-12">
+			<div class="mt-4 space-y-2">
+				<div
+					class="h-0.5 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="1000"
+				>
+				</div>
+				<div
+					class="flex flex-col sm:flex-row gap-3 justify-between items-center"
+					data-aos="fade-up"
+					data-aos-duration="1500"
+				>
+					<div class="flex gap-3 items-center">
+						<a href="/">
+							<h3 class="text-secondary text-xs font-medium">
+								<span>Amjad</span>
+								<span class="font-bold">Yaghi</span>
+							</h3>
+						</a>
+					</div>
+				<Nav />
+				</div>
+				<div
+					class="h-1.5 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="2000"
+				>
+				</div>
+				<div
+					class="h-3 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="2500"
+				>
+				</div>
+				<div
+					class="h-6 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="3000"
+				>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<div
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto flex justify-center mb-8"
+	>
+		<HomeButton />
+	</div>
+
+	<main
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto"
+	>
+		{
+			Object.entries(pictures).map(([title, images]) => (
+				<Gallery key={title} title={title} images={images} />
+			))
+		}
+	</main>
+
+	<div
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto flex justify-center mt-16"
+	>
+		<HomeButton />
+	</div>
+
+	<footer class="mt-12 p-8 flex flex-col gap-2 2xl:max-w-7xl mx-auto mb-16">
+		<div
+			class="h-1.5 bg-secondary"
+			data-aos="fade-up"
+			data-aos-duration="2000"
+		>
+		</div>
+		<div
+			class="h-3 bg-secondary"
+			data-aos="fade-up"
+			data-aos-duration="2500"
+		>
+		</div>
+		<div
+			class="h-6 bg-secondary flex items-end p-4"
+			data-aos="fade-up"
+			data-aos-duration="3000"
+		>
+		</div>
+	</footer>
+</BaseLayout>

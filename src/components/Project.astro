@@ -1,0 +1,118 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import GitHub from "../components/Icons/GitHub.astro";
+import Nav from "../components/Nav.astro";
+import ProjectNav from "../components/ProjectNav.astro";
+
+const { project, previous, next } = Astro.props;
+---
+
+<BaseLayout
+	title={`${project.data.title} | Amjad Yaghi`}
+	description={project.data.description}
+>
+	<section class="bg-primary">
+		<div
+			class="px-8 2xl:max-w-7xl mx-auto"
+			data-aos="fade-up"
+			data-aos-duration="2000"
+		>
+		</div>
+		<div class="px-8 2xl:max-w-7xl mx-auto pb-12">
+			<div class="mt-4 space-y-2">
+				<div
+					class="h-0.5 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="1000"
+				>
+				</div>
+				<div
+					class="flex flex-col sm:flex-row gap-3 justify-between items-center"
+					data-aos="fade-up"
+					data-aos-duration="1500"
+				>
+					<div class="flex gap-3 items-center">
+						<a href="/">
+							<h3 class="text-secondary text-xs font-medium">
+								<span>Amjad</span>
+								<span class="font-bold">Yaghi</span>
+							</h3>
+						</a>
+					</div>
+				<Nav />
+				</div>
+				<div
+					class="h-1.5 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="2000"
+				>
+				</div>
+				<div
+					class="h-3 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="2500"
+				>
+				</div>
+				<div
+					class="h-6 bg-secondary"
+					data-aos="fade-up"
+					data-aos-duration="3000"
+				>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<ProjectNav previous={previous} next={next} />
+
+	<main
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto my-16"
+	>
+		<div class="text-center">
+			<h1 class="mt-8 text-4xl lg:text-6xl font-bold text-secondary">
+				{project.data.title}
+			</h1>
+			<p class="my-4 text-slate-800">{project.data.description}</p>
+
+			<div class="flex justify-center mt-4">
+				<a
+					href={project.data.link}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="flex items-center gap-2 px-4 py-1 bg-secondary text-primary rounded font-bold text-sm"
+				>
+					<GitHub /><span> GitHub</span>
+				</a>
+			</div>
+		</div>
+
+		<div class="mx-auto mt-8 lg:mt-16 xl:mt-24 prose lg:prose-xl">
+			<slot />
+		</div>
+	</main>
+
+	<ProjectNav previous={previous} next={next} />
+
+	<footer class="mt-12 p-8 flex flex-col gap-2 2xl:max-w-7xl mx-auto mb-16">
+		<div
+			class="h-1.5 bg-secondary"
+			data-aos="fade-up"
+			data-aos-duration="2000"
+		>
+		</div>
+		<div
+			class="h-3 bg-secondary"
+			data-aos="fade-up"
+			data-aos-duration="2500"
+		>
+		</div>
+		<div
+			class="h-6 bg-secondary flex items-end p-4"
+			data-aos="fade-up"
+			data-aos-duration="3000"
+		>
+		</div>
+	</footer>
+</BaseLayout>

@@ -1,0 +1,87 @@
+---
+// Define the features array directly in the Astro component
+const features = [
+  { title: "Singapore" },
+  { title: "Japan" },
+  { title: "Hong Kong" },
+  { title: "Banff" },
+];
+
+const galleryIdMap = {
+  Singapore: "Singapore",
+  Japan: "Japan",
+  "Hong Kong": "HK",
+  Banff: "Banff",
+};
+---
+
+<section class="bg-primary">
+  <div class="px-8 2xl:max-w-7xl mx-auto py-6">
+    <div class="mt-32 space-y-2">
+      <div
+        class="h-0.5 bg-secondary"
+        data-aos="fade-up"
+        data-aos-duration="1000"
+      >
+      </div>
+      <h3
+        class="text-secondary font-medium"
+        data-aos="fade-up"
+        data-aos-duration="1500"
+      >
+        <a href="/gallery" class="text-secondary hover:underline font-medium">
+          <span>Places</span>
+          <span class="font-bold">I've</span>
+          <span class="italic">been</span>
+          <span>&nbsp; ↗</span>
+        </a>
+      </h3>
+      <div
+        class="h-1.5 bg-secondary"
+        data-aos="fade-up"
+        data-aos-duration="2000"
+      >
+      </div>
+      <div class="h-3 bg-secondary" data-aos="fade-up" data-aos-duration="2500">
+      </div>
+      <div class="h-6 bg-secondary" data-aos="fade-up" data-aos-duration="3000">
+      </div>
+      <div
+        class="h-12 bg-secondary"
+        data-aos="fade-up"
+        data-aos-duration="3000"
+      >
+      </div>
+      <div
+        class="h-24 bg-secondary"
+        data-aos="fade-up"
+        data-aos-duration="3000"
+        data-aos-delay="150"
+      >
+      </div>
+    </div>
+
+    <ul
+      class="mx-auto flex flex-row text-left gap-3 items-start text-secondary mt-3 mb-16"
+    >
+      {
+        features.map((feature) => (
+          <>
+            <li
+              class="flow-root col-span-full h-full mb-16"
+              data-aos="fade-up"
+              data-aos-duration="2500"
+              data-aos-delay="150"
+            >
+              <a href={`/gallery#${galleryIdMap[feature.title]}`}>
+                <div>
+                  <p class="italic shrink-0 text-xs ">{feature.title}</p>
+                </div>
+              </a>
+            </li>
+          </>
+        ))
+      }
+    </ul>
+  </div>
+</section>

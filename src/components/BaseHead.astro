@@ -1,0 +1,57 @@
+---
+import "../output.css";
+
+interface Props {
+	title?: string;
+	description?: string;
+	image?: string;
+}
+
+const {
+	title = "Amjad Yaghi | Portfolio",
+	description = "Engineering Physics student at UBC. Portfolio of robotics, computer vision, and interactive projects.",
+	image = "/favicons/android-chrome-512x512.png",
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site).toString();
+const socialImage = new URL(image, Astro.site).toString();
+---
+
+<meta charset="UTF-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<title>{title}</title>
+<meta name="description" content={description} />
+<meta name="author" content="Amjad Yaghi" />
+<meta name="keywords" content="Amjad Yaghi, portfolio, design, projects, engineering physics, UBC, robotics" />
+<meta name="apple-mobile-web-app-title" content="Amjad Yaghi" />
+<link rel="canonical" href={canonicalURL} />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonicalURL} />
+<meta property="og:image" content={socialImage} />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={socialImage} />
+
+<link rel="apple-touch-icon" sizes="180x180" href="/favicons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/favicons/favicon-32x32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/favicons/favicon-16x16.png" />
+<link rel="manifest" href="/favicons/site.webmanifest" />
+<link rel="mask-icon" href="/favicons/safari-pinned-tab.svg" color="#00a86b" />
+<meta name="msapplication-TileColor" content="#00a86b" />
+<meta name="theme-color" content="#00a86b" />
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+	href="https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=swap"
+	rel="stylesheet"
+/>

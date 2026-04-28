@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS */
+:root {
+	font-family: "Work Sans", sans-serif;
+	font-variant-numeric: tabular-nums;
+}
+
+@keyframes fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.fade-in {
+	animation: fade-in 3s
+}
+
+[id] {
+	scroll-margin-top: 210px;
+}
+  

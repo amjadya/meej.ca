@@ -1,0 +1,52 @@
+---
+// Define testimonials/opinions data
+const humanOpinions = [
+  {
+    name: "Eren Burton",
+    role: "Tech Lead @ Streamily",
+    opinion: "Amjad is resourceful and motivated with a strong passion for learning. I am confident in his potential to achieve success in any endeavor he chooses to pursue. I'd hire him in a heartbeat.",
+  },
+  {
+    name: "Eric Qu",
+    role: "Cofounder @ ClinicVoice",
+    opinion:
+      "I know that he has strong values that will allow him to be brought far in his career and family. His inquisitive and curious mind makes him a very interesting person to talk to.",
+  },
+  {
+    name: "Edward Shao",
+    role: "SWE @ Snowflake",
+    opinion:
+      "I love Amjad. As a friend. But also professionally. I've worked with him plenty and his number one thing is he learns super quick; projects feel satisfying and effortless with him on the team 😎.",
+  },
+  {
+    name: "Aysha Yaghi",
+    role: "Mother of Three",
+    opinion: "My son is so handsome.",
+  },
+];
+---
+
+<section class="bg-primary">
+  <div class="px-8 2xl:max-w-7xl mx-auto py-6">
+    <div class="mt-6 space-y-2">
+      <div class="h-0.5 bg-secondary"></div>
+      <h3 class="text-secondary text-base font-medium">
+        <span>Nice things people have said</span>
+        <span class="font-bold">about me</span>
+      </h3>
+      <div class="h-1.5 bg-secondary"></div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-4 text-secondary gap-6 pt-2 mt-2">
+      {
+        humanOpinions.map((opinion) => (
+          <div>
+            <p class="italic text-2xl block font-bold">
+              {opinion.name} {opinion.role}
+            </p>
+            <p class="text-sm leading-relaxed mt-6">{opinion.opinion}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

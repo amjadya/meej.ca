@@ -1,0 +1,59 @@
+---
+import { type CollectionEntry, getCollection, render } from "astro:content";
+import Project from "../../../components/Project.astro";
+
+export interface Props {
+  project: CollectionEntry<"project">;
+}
+
+const { slug } = Astro.params;
+
+export async function getStaticPaths() {
+  const projects = await getCollection("project");
+
+  return projects
+    .map((project) => ({
+      params: { slug: project.data.slug },
+      props: { project },
+      order: project.data.order ?? 0,
+    }))
+    .sort((a, b) => a.order - b.order);
+}
+
+async function getWithNeighbours(slug: string | undefined) {
+  if (!slug) return null;
+  const projects = await getCollection("project");
+
+  projects.sort((a, b) => a.data.order - b.data.order);
+
+  const project = projects.find((project) => project.data.slug === slug);
+
+  if (!project) {
+    return null;
+  }
+
+  const projectIndex = projects.indexOf(project);
+  const next = projects[(projectIndex + 1) % projects.length];
+  const previous =
+    projects[(projectIndex + projects.length - 1) % projects.length];
+
+  return { project, previous, next };
+}
+
+const result = await getWithNeighbours(slug);
+const Content = result ? (await render(result.project)).Content : null;
+---
+
+{
+  result && Content ? (
+    <Project
+      project={result.project}
+      previous={result.previous}
+      next={result.next}
+    >
+      <Content />
+    </Project>
+  ) : (
+    <p>Not found</p>
+  )
+}
