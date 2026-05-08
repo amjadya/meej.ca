@@ -1,0 +1,27 @@
+---
+title: Reviewing the ECS foundations
+date: 2026-04-19
+summary: Reviewed Saf's ECS header PR. World, Entity, Pos2, Types are in. Clean.
+draft: false
+---
+
+## What I'm trying to achieve
+
+Review Saf's ECS architecture PR.
+
+## Review & research
+
+PR #3 introduces the core ECS headers: `World` (manages entities by ID),
+`Entity` (holds position and ID), `Pos2` (2D float position with arithmetic
+ops), `Types` (`EntityId` as `uint64_t`). Old `Vec2` using doubles is replaced
+by `Pos2` using floats. Easy to follow.
+
+## Driving questions
+
+- What does a 2D car physics model actually need? Friction, steering
+  geometry, forces? Still open.
+- How do we structure the project so it scales to 3D without a rewrite?
+
+## Next
+
+- Still need to finish my finals!

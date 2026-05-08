@@ -1,0 +1,104 @@
+---
+import { getCollection, type CollectionEntry } from "astro:content";
+import { logbooks } from "../../data/logbooks";
+
+const entries = await getCollection("logbook", (entry) => {
+	return import.meta.env.PROD ? !entry.data.draft : true;
+});
+
+const latestByProject = new Map<string, CollectionEntry<"logbook">>();
+const countByProject = new Map<string, number>();
+for (const entry of entries) {
+	const [project] = entry.id.split("/");
+	countByProject.set(project, (countByProject.get(project) ?? 0) + 1);
+	const current = latestByProject.get(project);
+	if (!current || entry.data.date > current.data.date) {
+		latestByProject.set(project, entry);
+	}
+}
+
+const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
+
+const sorted = [...logbooks].sort((a, b) => a.order - b.order);
+---
+
+<section class="bg-primary">
+	<div class="px-8 2xl:max-w-7xl mx-auto pt-32 pb-16">
+		<div class="space-y-2">
+			<div
+				class="h-0.5 bg-secondary"
+				data-aos="fade-up"
+				data-aos-duration="1000"
+			>
+			</div>
+			<div
+				class="flex items-center gap-3"
+				data-aos="fade-up"
+				data-aos-duration="1500"
+			>
+				<h3 class="text-secondary text-base font-medium">
+					<span>Current</span>
+					<span class="font-bold">logbooks</span>
+				</h3>
+				<span class="relative inline-flex h-2 w-2" aria-label="active">
+					<span
+						class="absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75 animate-ping"
+					></span>
+					<span
+						class="relative inline-flex rounded-full h-2 w-2 bg-secondary"
+					></span>
+				</span>
+				<span class="text-secondary text-xs font-mono uppercase tracking-wider"
+					>live</span
+				>
+			</div>
+		</div>
+
+		<ul
+			class="mx-auto grid grid-cols-1 sm:grid-cols-2 [grid-template-rows:auto_auto_1fr_auto_auto] text-secondary gap-x-12 gap-y-6 mt-20"
+			role="list"
+		>
+			{
+				sorted.map((lb, index) => {
+					const latest = latestByProject.get(lb.slug);
+					const count = countByProject.get(lb.slug) ?? 0;
+					return (
+						<li
+							class="row-span-5 grid grid-rows-subgrid gap-y-6"
+							data-aos="fade-up"
+							data-aos-duration={1500 + index * 500}
+						>
+							<a href={`/logbook/${lb.slug}`} class="contents group">
+								<div class="flex items-center gap-3 text-xs font-mono uppercase tracking-widest text-secondary/70">
+									<span>Log No. 0{index + 1}</span>
+									<span class="h-px flex-1 bg-secondary/30" />
+									<span>
+										{count} {count === 1 ? "entry" : "entries"}
+									</span>
+								</div>
+								<p class="italic text-3xl lg:text-4xl font-bold text-secondary group-hover:underline underline-offset-4">
+									{lb.title}
+								</p>
+								<p class="text-base leading-relaxed">{lb.blurb}</p>
+								{latest ? (
+									<p class="text-xs font-mono text-secondary/70 uppercase tracking-wider">
+										<span>latest</span>
+										<span class="mx-2">·</span>
+										<span>{fmtDate(latest.data.date)}</span>
+										<span class="mx-2">·</span>
+										<span class="normal-case tracking-normal">
+											{latest.data.title}
+										</span>
+									</p>
+								) : (
+									<p />
+								)}
+								<p class="text-base font-semibold">Open logbook &nbsp; ↗</p>
+							</a>
+						</li>
+					);
+				})
+			}
+		</ul>
+	</div>
+</section>

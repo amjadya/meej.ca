@@ -1,0 +1,64 @@
+---
+title: Subteam alignment & concept gen kickoff
+date: 2026-05-05
+summary: >
+  First proper subteam meeting. Confirmed avionics owns detection and
+  localisation. Last year's approach failed by putting all locating on the
+  plane. Timeline is more aggressive: 6 weeks to a solid design, then prototype.
+tags: [meeting]
+draft: false 
+---
+
+## What I'm trying to achieve
+
+Get aligned with the full subteam on where we've been, what we own, and
+what the short-term looks like.
+
+## Notes from the subteam meeting
+
+**Attendees:** Aurora, Leo, Isaac, Owen, Radman, Amjad.
+
+### Scope of work and ownership
+
+Three primary functions split across the subteam:
+
+- **Motion** (shared priority); how the payload moves on the DLZ
+- **Interaction** (mech priority); connecting to the plane during capture,
+  disconnecting during release
+- **Detection + localisation** (avionics priority); find the payload,
+  guide the approach, avoid the DLZ boundary and other obstacles
+
+### What went wrong last year
+
+The plane did all the locating. We were
+not able to land precisely enough to capture non-electronic payloads.
+Putting sensors and motors on the payload is now the confirmed direction.
+
+### Constraints worth noting
+
+- Payloads stay on the DLZ until end of competition: overnight battery life,
+  morning moisture, and previously dropped payloads are concerns.
+- Worst case: one other payload already on the DLZ to avoid. If we're
+  dropping several, we've probably given up on capture.
+
+### Timeline
+
+Shifted to something more aggressive. Derisking all summer wastes
+prototyping time. The new target is **6 weeks to a well-understood
+design, then start prototyping**.
+
+## Driving questions
+
+- What is RTK and does it fit a localisation use case? Still open from
+  the first meeting.
+- What's our weight budget? Still open from the first meeting.
+- How configurable is the DLZ? [reread the rule-set]
+- How do we handle power for a payload sitting on the DLZ overnight?
+- What does the payload history document say? [Isaac sending soon]
+
+## Next
+
+- Create a collection of concepts. Research the space, reference previous work.
+- Read the payload history document when it arrives.
+- Can't meaningfully plan around a design that isn't shaped yet, so revisit
+  timeline after concept gen.
