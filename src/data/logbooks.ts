@@ -17,7 +17,7 @@ export const logbooks: Logbook[] = [
 		slug: "wayless",
 		title: "Wayless",
 		blurb:
-			"A side project with saf. Building a vehicle physics simulator step by step in C++.",
+			"A side project with my friend Saf. Building a vehicle physics simulator step by step in C++.",
 		order: 2,
 	},
 ];
