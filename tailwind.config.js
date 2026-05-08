@@ -10,6 +10,14 @@ module.exports = {
 				primary: "#fafafa",
 				secondary: "#00a86b",
 			},
+			typography: {
+				DEFAULT: {
+					css: {
+						"code::before": { content: '""' },
+						"code::after": { content: '""' },
+					},
+				},
+			},
 		},
 	},
 	plugins: [require("@tailwindcss/typography")],
