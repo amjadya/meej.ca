@@ -1,0 +1,177 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import LogbookHeader from "../../../components/LogbookHeader.astro";
+import HomeButton from "../../../components/HomeButton.astro";
+import { logbooks, type Logbook } from "../../../data/logbooks";
+
+export async function getStaticPaths() {
+	return logbooks.map((logbook) => ({
+		params: { project: logbook.slug },
+		props: { logbook },
+	}));
+}
+
+interface Props {
+	logbook: Logbook;
+}
+
+const { project } = Astro.params;
+const { logbook } = Astro.props;
+
+const entries = await getCollection("logbook", (entry) => {
+	const inProject = entry.id.startsWith(`${project}/`);
+	const visible = import.meta.env.PROD ? !entry.data.draft : true;
+	return inProject && visible;
+});
+
+entries.sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+
+const fmtDate = (d: Date) =>
+	d.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		timeZone: "UTC",
+	});
+const fmtMonth = (d: Date) =>
+	d.toLocaleDateString("en-US", { year: "numeric", month: "long", timeZone: "UTC" });
+
+type Entry = (typeof entries)[number];
+type TimelineItem =
+	| { kind: "month"; label: string }
+	| { kind: "entry"; entry: Entry };
+
+const timeline: TimelineItem[] = [];
+let lastLabel: string | null = null;
+for (const entry of entries) {
+	const label = fmtMonth(entry.data.date);
+	if (label !== lastLabel) {
+		timeline.push({ kind: "month", label });
+		lastLabel = label;
+	}
+	timeline.push({ kind: "entry", entry });
+}
+
+const slugFromId = (id: string) => id.split("/").slice(1).join("/");
+---
+
+<BaseLayout
+	title={`${logbook.title} | Logbook | Amjad Yaghi`}
+	description={logbook.blurb}
+>
+	<LogbookHeader />
+
+	<main
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto my-16"
+	>
+		<div class="text-center">
+			<p class="text-xs font-mono uppercase tracking-widest text-secondary/70">
+				Logbook
+			</p>
+			<h1 class="mt-4 text-4xl lg:text-6xl font-bold italic text-secondary">
+				{logbook.title}
+			</h1>
+			<p
+				class="my-4 text-slate-800 max-w-2xl mx-auto leading-relaxed"
+			>
+				{logbook.blurb}
+			</p>
+			<p class="text-xs font-mono uppercase tracking-wider text-secondary/70">
+				{entries.length}
+				{entries.length === 1 ? "entry" : "entries"}
+			</p>
+		</div>
+
+		{
+			entries.length === 0 ? (
+				<p class="mt-24 text-center text-secondary/70 italic">
+					No entries yet. Check back soon.
+				</p>
+			) : (
+				<div class="mt-24 max-w-3xl mx-auto relative">
+					<div
+						class="absolute left-3 top-3 bottom-3 w-px bg-secondary/30 pointer-events-none"
+						aria-hidden="true"
+					/>
+					<ol class="list-none">
+						{timeline.map((item, i) =>
+							item.kind === "month" ? (
+								<li class="relative pl-12 mt-12 first:mt-0 mb-8">
+									<span
+										class="absolute left-3 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-secondary ring-4 ring-primary"
+										aria-hidden="true"
+									/>
+									<span class="inline-block bg-primary px-3 py-1 border border-secondary/40 text-xs font-mono uppercase tracking-widest text-secondary">
+										{item.label}
+									</span>
+								</li>
+							) : (
+								<li class="relative pl-12 mb-12 last:mb-0">
+									<span
+										class="absolute left-3 top-2 -translate-x-1/2 w-3 h-3 rounded-full bg-secondary ring-4 ring-primary"
+										aria-hidden="true"
+									/>
+									<a
+										href={`/logbook/${project}/${slugFromId(item.entry.id)}`}
+										class="group block"
+									>
+										<p class="text-xs font-mono text-secondary/70 tracking-wider">
+											<time
+												datetime={item.entry.data.date
+													.toISOString()
+													.slice(0, 10)}
+											>
+												{fmtDate(item.entry.data.date)}
+											</time>
+											{item.entry.data.draft && (
+												<span class="ml-3 px-2 py-0.5 bg-secondary/20 text-secondary uppercase">
+													draft
+												</span>
+											)}
+										</p>
+										<h2 class="text-2xl sm:text-3xl font-bold italic text-secondary mt-2 group-hover:underline underline-offset-4">
+											{item.entry.data.title}
+										</h2>
+										<p class="text-base text-slate-800 mt-3 leading-relaxed">
+											{item.entry.data.summary}
+										</p>
+										{item.entry.data.tags &&
+											item.entry.data.tags.length > 0 && (
+												<ul class="flex flex-wrap gap-2 mt-4" role="list">
+													{item.entry.data.tags.map((tag) => (
+														<li class="text-xs font-mono text-secondary/70 px-2 py-0.5 border border-secondary/30">
+															{tag}
+														</li>
+													))}
+												</ul>
+											)}
+									</a>
+								</li>
+							)
+						)}
+					</ol>
+				</div>
+			)
+		}
+
+		<div class="mt-24 flex justify-center">
+			<HomeButton />
+		</div>
+	</main>
+
+	<footer class="mt-12 p-8 flex flex-col gap-2 2xl:max-w-7xl mx-auto mb-16">
+		<div class="h-1.5 bg-secondary" data-aos="fade-up" data-aos-duration="2000">
+		</div>
+		<div class="h-3 bg-secondary" data-aos="fade-up" data-aos-duration="2500">
+		</div>
+		<div
+			class="h-6 bg-secondary flex items-end p-4"
+			data-aos="fade-up"
+			data-aos-duration="3000"
+		>
+		</div>
+	</footer>
+</BaseLayout>

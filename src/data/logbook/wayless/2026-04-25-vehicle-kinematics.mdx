@@ -1,0 +1,56 @@
+---
+title: Vehicle kinematics on the drive to Kelowna
+date: 2026-04-25
+summary: >
+  Six-hour commute to Kelowna. Worked out the kinematic model: bicycle
+  model, no-slip assumption, back axle as reference. PR #4 is up.
+draft: false
+---
+
+## What I'm trying to achieve
+
+Use the commute to design and implement the vehicle kinematics system.
+
+## Research
+
+### Model
+
+Using the back axle (the line connecting the two rear wheels) as the
+reference point for position and heading. The rear wheels don't steer,
+which keeps the math clean among other advantages.
+
+No-slip assumption for now: wheels roll without skidding, velocity always
+aligned with wheel heading. Fine for now, but slipping is fundamental to car physics.
+We will have to revisit this later.
+
+### Bicycle model
+
+Treat the vehicle as two wheels: rear axle (reference) and front (steered).
+Turn radius:
+
+```
+R = wheelbase / tan(steeringAngle) + trackWidth / 2
+```
+
+Angular velocity: `w = speed / R`
+
+Position update: `pos += (speed * cos(heading), speed * sin(heading)) * dt`
+
+Straight-line case (`steeringAngle == 0`) handled separately to avoid
+division by zero.
+
+### Builder pattern
+
+`VehicleBuilder` requires pos, heading, wheelbase, and trackWidth before
+construction. Throws on missing fields. (First time using the builder pattern, super neat.)
+
+## Driving questions
+
+- No-slip is a simplification. How soon will it break down enough to matter?
+- What pixel-to-metres scale makes the simulation feel right?
+
+## Next
+
+- Wire `update()` into the render loop with a clock.
+- Add pixel-to-metres conversion.
+- Merge PR #4.

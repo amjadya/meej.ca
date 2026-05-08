@@ -1,0 +1,326 @@
+---
+import { getCollection, render, type CollectionEntry } from "astro:content";
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import LogbookHeader from "../../../components/LogbookHeader.astro";
+import HomeButton from "../../../components/HomeButton.astro";
+import { logbooks } from "../../../data/logbooks";
+
+export async function getStaticPaths() {
+	const entries = await getCollection("logbook", (entry) => {
+		return import.meta.env.PROD ? !entry.data.draft : true;
+	});
+	return entries.map((entry) => {
+		const [project, ...rest] = entry.id.split("/");
+		return {
+			params: { project, entry: rest.join("/") },
+			props: { entry },
+		};
+	});
+}
+
+interface Props {
+	entry: CollectionEntry<"logbook">;
+}
+
+const { entry } = Astro.props;
+const [projectSlug] = entry.id.split("/");
+const logbook = logbooks.find((lb) => lb.slug === projectSlug);
+
+const { Content, headings } = await render(entry);
+const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+
+const siblings = await getCollection("logbook", (e) => {
+	const inProject = e.id.startsWith(`${projectSlug}/`);
+	const visible = import.meta.env.PROD ? !e.data.draft : true;
+	return inProject && visible;
+});
+siblings.sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+const idx = siblings.findIndex((e) => e.id === entry.id);
+const prev = idx > 0 ? siblings[idx - 1] : null;
+const next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
+
+const slugFromId = (id: string) => id.split("/").slice(1).join("/");
+const fmtDate = (d: Date) =>
+	d.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		timeZone: "UTC",
+	});
+const isoDate = entry.data.date.toISOString().slice(0, 10);
+---
+
+<BaseLayout
+	title={`${entry.data.title} | ${logbook?.title ?? "Logbook"} | Amjad Yaghi`}
+	description={entry.data.summary}
+>
+	<LogbookHeader />
+
+	<nav
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto gap-8 grid grid-cols-3"
+		aria-label="Entry navigation"
+	>
+		{
+			prev ? (
+				<a
+					class="text-sm bg-secondary text-white px-4 py-1 flex gap-2 items-center font-bold justify-self-start"
+					href={`/logbook/${projectSlug}/${slugFromId(prev.id)}`}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="15 18 9 12 15 6" />
+					</svg>
+					<span class="hidden sm:block">{prev.data.title}</span>
+				</a>
+			) : (
+				<span />
+			)
+		}
+
+		<HomeButton />
+
+		{
+			next ? (
+				<a
+					class="text-sm bg-secondary text-white px-4 py-1 flex gap-2 items-center font-bold justify-self-end"
+					href={`/logbook/${projectSlug}/${slugFromId(next.id)}`}
+				>
+					<span class="hidden sm:block">{next.data.title}</span>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="9 18 15 12 9 6" />
+					</svg>
+				</a>
+			) : (
+				<span />
+			)
+		}
+	</nav>
+
+	<main
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto my-16"
+	>
+		<div class="text-center">
+			<p class="text-xs font-mono uppercase tracking-widest text-secondary/70">
+				<a href={`/logbook/${projectSlug}`} class="hover:underline">
+					{logbook?.title ?? projectSlug}
+				</a>
+				<span class="mx-2">·</span>
+				<time datetime={isoDate}>{fmtDate(entry.data.date)}</time>
+				{
+					entry.data.draft && (
+						<>
+							<span class="mx-2">·</span>
+							<span class="px-2 py-0.5 bg-secondary/20 text-secondary">
+								draft
+							</span>
+						</>
+					)
+				}
+			</p>
+			<h1 class="mt-6 text-4xl lg:text-6xl font-bold text-secondary">
+				{entry.data.title}
+			</h1>
+			<p class="my-4 text-slate-800 italic max-w-2xl mx-auto leading-relaxed">
+				{entry.data.summary}
+			</p>
+			{
+				entry.data.tags && entry.data.tags.length > 0 && (
+					<ul class="flex flex-wrap justify-center gap-2 mt-4" role="list">
+						{entry.data.tags.map((tag) => (
+							<li class="text-xs font-mono text-secondary/70 px-2 py-0.5 border border-secondary/30">
+								{tag}
+							</li>
+						))}
+					</ul>
+				)
+			}
+		</div>
+
+		<div class="relative mt-8 lg:mt-16 xl:mt-24">
+			{
+				tocHeadings.length > 0 && (
+					<aside class="hidden xl:block absolute top-0 left-0 bottom-0 w-48">
+						<nav
+							class="sticky top-12"
+							aria-label="Table of contents"
+						>
+							<p class="text-xs font-mono uppercase tracking-widest text-secondary/70 mb-4">
+								On this page
+							</p>
+							<ol class="list-none space-y-2 border-l border-secondary/30">
+								{tocHeadings.map((h) => (
+									<li class={h.depth === 3 ? "pl-6" : "pl-3"}>
+										<a
+											href={`#${h.slug}`}
+											data-toc-link={h.slug}
+											class="block text-sm leading-snug text-secondary/70 hover:text-secondary transition-colors"
+										>
+											{h.text}
+										</a>
+									</li>
+								))}
+							</ol>
+						</nav>
+					</aside>
+				)
+			}
+
+			<div
+				class="mx-auto prose lg:prose-xl prose-headings:text-secondary prose-a:text-secondary scroll-smooth"
+			>
+				<Content />
+			</div>
+		</div>
+	</main>
+
+	<script is:inline>
+		(function () {
+			var links = new Map();
+			document.querySelectorAll("[data-toc-link]").forEach(function (a) {
+				links.set(a.dataset.tocLink, a);
+			});
+			if (links.size === 0) return;
+
+			var active = null;
+			function setActive(slug) {
+				if (active === slug) return;
+				if (active) {
+					var prev = links.get(active);
+					if (prev) {
+						prev.classList.remove("text-secondary", "font-semibold");
+						prev.classList.add("text-secondary/70");
+					}
+				}
+				active = slug;
+				if (slug) {
+					var next = links.get(slug);
+					if (next) {
+						next.classList.add("text-secondary", "font-semibold");
+						next.classList.remove("text-secondary/70");
+					}
+				}
+			}
+
+			var observer = new IntersectionObserver(
+				function (entries) {
+					var intersecting = entries.filter(function (e) {
+						return e.isIntersecting;
+					});
+					if (intersecting.length > 0) {
+						var topmost = intersecting.sort(function (a, b) {
+							return (
+								a.target.getBoundingClientRect().top -
+								b.target.getBoundingClientRect().top
+							);
+						})[0];
+						setActive(topmost.target.id);
+					}
+				},
+				{ rootMargin: "-80px 0px -70% 0px", threshold: 0 }
+			);
+
+			document
+				.querySelectorAll(".prose h2[id], .prose h3[id]")
+				.forEach(function (h) {
+					observer.observe(h);
+				});
+		})();
+	</script>
+
+	<nav
+		data-aos="fade-up"
+		data-aos-duration="2000"
+		class="px-8 2xl:max-w-7xl mx-auto gap-8 grid grid-cols-3"
+		aria-label="Entry navigation"
+	>
+		{
+			prev ? (
+				<a
+					class="text-sm bg-secondary text-white px-4 py-1 flex gap-2 items-center font-bold justify-self-start"
+					href={`/logbook/${projectSlug}/${slugFromId(prev.id)}`}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="15 18 9 12 15 6" />
+					</svg>
+					<span class="hidden sm:block">{prev.data.title}</span>
+				</a>
+			) : (
+				<span />
+			)
+		}
+
+		<HomeButton />
+
+		{
+			next ? (
+				<a
+					class="text-sm bg-secondary text-white px-4 py-1 flex gap-2 items-center font-bold justify-self-end"
+					href={`/logbook/${projectSlug}/${slugFromId(next.id)}`}
+				>
+					<span class="hidden sm:block">{next.data.title}</span>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<polyline points="9 18 15 12 9 6" />
+					</svg>
+				</a>
+			) : (
+				<span />
+			)
+		}
+	</nav>
+
+	<footer class="mt-12 p-8 flex flex-col gap-2 2xl:max-w-7xl mx-auto mb-16">
+		<div class="h-1.5 bg-secondary" data-aos="fade-up" data-aos-duration="2000">
+		</div>
+		<div class="h-3 bg-secondary" data-aos="fade-up" data-aos-duration="2500">
+		</div>
+		<div
+			class="h-6 bg-secondary flex items-end p-4"
+			data-aos="fade-up"
+			data-aos-duration="3000"
+		>
+		</div>
+	</footer>
+</BaseLayout>
