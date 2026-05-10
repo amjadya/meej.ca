@@ -1,0 +1,53 @@
+---
+title: "PR #4 feedback: typed angles and value-move"
+date: 2026-05-10
+summary: >
+  Addressed Saf's comments on PR #4. Applied pass-by-value
+  plus std::move on the builder, and introduced Angle and
+  AngularVelocity types so that we explicitly state angle units.
+draft: true
+---
+
+## What I'm trying to achieve
+
+Walk through Saf's review comments on PR #4, understand the underlying C++ idioms, and address each comment.
+
+## Research
+
+### One-copy-one-move idiom
+
+Saf flagged `withPos(Pos2 pos)`: the parameter is a copy, then `this->pos = pos;` is a second copy. For trivial types like the current Pos2 it is no different from a single copy at runtime, but the convention is to take by value and `std::move` into the member. That gives a single copy when the caller passes an lvalue, and zero copies when they pass a temporary.
+
+Pass-by-value-and-move is an approach that handles both lvalue and rvalue arguments correctly, without surprising the caller.
+
+Added `std::move` only on the Pos2 setter. Floats are trivial; adding `std::move` to the float setters would mislead readers into thinking there is something to steal.
+
+### Default constructors
+
+Learned: the moment any constructor is written, the compiler stops generating the implicit default constructor for you. You have to explicitly opt back in with `Foo() = default;` if you want a default ctor. Vehicle, VehicleBuilder, and Entity get the implicit default for free, since they have no user-written ctors.
+
+### Angle and AngularVelocity types
+
+Saf's second comment: `heading` and `steeringAngle` were bare floats, and there is no signal at the call site whether they are radians or degrees. Solved with two new classes.
+
+`Angle` stores its value canonically in radians (`rad_`). Construction goes through `Angle::fromRadians(x)` or `Angle::fromDegrees(x)`. Accessors `radians()` and `degrees()` read out either way. `operator+=` lets `heading += delta` work.
+
+`AngularVelocity` is the same shape, in radians per second. It has an `operator*(float seconds)` that returns an `Angle`, so `angularVelocity * dt` comes out cleanly typed.
+
+The float-taking constructor is `private` and `explicit`. The private keyword blocks direct external construction; explicit blocks cheeky float-to-Angle conversions if we ever move the class to public and forget the whole point of the factories. In other words the friction is the feature, and callers must name the unit at every construction site. This is the whole reason these types exist instead of `using Angle = float;`.
+
+### Style notes I learned worth logging
+
+- Google convention: `k`-prefixed CamelCase for compile-time constants (`kPi`, `kDegToRad`, `kRadToDeg`), trailing-underscore for private data members (`rad_`).
+
+## Driving questions
+
+- What pixel-to-metres scale makes the simulation feel right? Still open.
+- What does steering input look like from a user's perspective: keyboard, gamepad, mouse? What does it look like when it's hard-coded?
+- How sensitive is the kinematic update to tick rate / dt?
+- Should Pos2 and Angle expose both `+` and `+=` (and similar pairs), or only what the current call sites use?
+
+## Next
+
+- Demo a simple car moving on screen with a basic rectangle sprite.
+- Wire `update()` into the render loop with a real clock so dt is meaningful.
