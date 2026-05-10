@@ -2,10 +2,11 @@
 title: "PR #4 feedback: typed angles and value-move"
 date: 2026-05-10
 summary: >
-  Addressed Saf's comments on PR #4. Applied pass-by-value
-  plus std::move on the builder, and introduced Angle and
+  Addressed Saf's comments on PR #4. Applied copy
+  + move utility on the builder, and introduced Angle and
   AngularVelocity types so that we explicitly state angle units.
-draft: true
+tags: [refactor]
+draft: false
 ---
 
 ## What I'm trying to achieve
@@ -34,7 +35,7 @@ Saf's second comment: `heading` and `steeringAngle` were bare floats, and there 
 
 `AngularVelocity` is the same shape, in radians per second. It has an `operator*(float seconds)` that returns an `Angle`, so `angularVelocity * dt` comes out cleanly typed.
 
-The float-taking constructor is `private` and `explicit`. The private keyword blocks direct external construction; explicit blocks cheeky float-to-Angle conversions if we ever move the class to public and forget the whole point of the factories. In other words the friction is the feature, and callers must name the unit at every construction site. This is the whole reason these types exist instead of `using Angle = float;`.
+The float-taking constructor is `private` and `explicit`. The private keyword blocks direct external construction; explicit blocks cheeky float-to-Angle conversions if we ever move the class to public and forget the whole point of the factories. In other words, the friction is the feature, and callers must name the unit at every construction site. This is the whole reason these types exist instead of `using Angle = float;`.
 
 ### Style notes I learned worth logging
 
