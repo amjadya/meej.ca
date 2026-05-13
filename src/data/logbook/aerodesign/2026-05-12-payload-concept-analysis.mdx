@@ -1,0 +1,87 @@
+---
+title: Payload concept analysis
+date: 2026-05-12
+summary: >
+  Built a document of payload options for the team, then sat down as a subteam
+  and analysed concept fragments across motion, interaction, and detection plus
+  localisation. Morphological chart and concept summaries are up next.
+tags: [meeting, research]
+draft: false
+---
+
+## What I'm trying to achieve
+
+Develop a document of options for the payload and present it to the team. Then
+analyse everyone's options across the three categories: motion, interaction, and detection 
+plus localisation. Get closer to picking a payload design.
+
+## Research
+
+Read four external references before the meeting and built a sensing
+comparison table.
+
+### What I read
+
+- <a href="https://github.com/open-navigation/opennav_docking" target="_blank" rel="noopener noreferrer">opennav_docking</a> (Open
+  Navigation, sponsored by NVIDIA). Not directly usable (ROS 2 stack, charging-dock
+  semantics), but a reusable insight is: navigate to a
+  staging pose using whatever global localisation you have, then run a
+  vision-control loop for the last metre using AprilTag or similar. Maps 
+  to "drive roughly towards the plane, then
+  refine".
+- <a href="https://github.com/scuttlerobot/SCUTTLE" target="_blank" rel="noopener noreferrer">SCUTTLE</a> (Texas A&M open-source
+  mobile robot). Complete reference for what a small differential-drive ground
+  robot looks like end to end: hardware CAD, motor controllers, kinematics
+  library, ROS driver. Not the payload itself (heavy, indoor
+  flat-floor assumptions), but a clean example of the layers.
+- <a href="https://arxiv.org/html/2508.16008v1" target="_blank" rel="noopener noreferrer">Self-Aligning EPM Connector</a> (Wang
+  and Stokes, Edinburgh, 2025). Mechanical connector using electro-permanent
+  magnets. Holds with no continuous power, switches with about 0.3 J. 
+  Reported success rates of 59 percent at 0 degrees, 45 percent at
+  20 degrees... Dunno if we're going to go with magnets but this was cool.
+- <a href="https://arxiv.org/abs/2011.06399" target="_blank" rel="noopener noreferrer">Fast robust peg-in-hole insertion with continuous visual servoing</a>
+  (Haugaard et al., 2020). Supervised learning on synthetic data for precision
+  peg insertion. Sim-to-real generalisation reported. Significant engineering
+  cost to bring up an ML-based stack from scratch.
+
+### Sensing comparison table
+
+| | **IR beacon homing** | **LIDAR (2D spinning)** | **UWB** | **Camera + AprilTag** | **Sonar (ultrasonic)** |
+|---|---|---|---|---|---|
+| **What it tells you** | Bearing to the beacon (no distance, no orientation) | Distance to nearest surface in each direction | Range between modules; pose by trilateration | Full 6-DOF pose of the tag relative to camera | Distance to whatever's in front of the transducer |
+| **Native precision (1 m range)** | Bearing ~5°, no useful distance | ~1-3 cm radial, ~1° angular | ~10 cm typical, ~3 cm tuned | ~1-2 cm, ~1-2° | ~1 cm distance, but cone is ~30° wide |
+| **What goes on the plane** | One IR LED emitter | Nothing (passive target) | 1-3 anchor modules | One printed AprilTag | Speakers (or reflectors) |
+| **What goes on the payload** | 4-8 photodiodes + filter | Spinning lidar unit | 1-2 tag modules | Camera + small SBC | Mics or transducer array |
+| **Outdoor sun robustness** | Workable with modulated carrier + 940 nm filter, but the hardest of the five | Fine for spinning units; cheap 1D ToF can struggle | Unaffected | Fine, manage exposure & glare | Unaffected by light; affected by **wind** |
+| **Surface unevenness impact** | Low (line-of-sight only) | Bumpy surface returns can confuse close-range scans | None | Low | High (bumps echo, especially low-mounted) |
+| **Power draw character** | Very low (LED pulses, photodiode is passive) | Moderate-high, continuous (motor + laser) | Low (short pulses) | Moderate (camera + SBC) | Low |
+| **Compute friendliness** | Bare MCU | MCU minimum, SBC comfortable | Bare MCU | Needs SBC (Pi-class) realistically | Bare MCU |
+| **Hardware cost** | \<$10 | $100-300 | ~$30/module, so $90-150 system | ~$30 (camera + Pi Zero) | \<$20 |
+| **Dev time to working prototype** | 1-2 weeks | 2-4 weeks | 2-3 weeks (calibration is the time) | 1-2 weeks | 2-3 weeks |
+| **Main failure modes** | Sun saturation if filter/modulation skimped; LOS blocked | Glass/black/very-shiny returns; rain/dust; mechanical wear | Multipath in metallic environments; needs ≥3 anchors for full pose | Tag occluded, glare, motion blur | Echoes off DLZ seams; wind noise; cone too wide for precise alignment |
+
+Range stops being a discriminator on a 2.4 m square DLZ. All five sensors
+comfortably reach the worst-case 3.4 m diagonal. Precision, cost, and
+outdoor robustness do the actual work of separating them.
+
+## Meeting: concept walkthrough
+
+**Attendees:** Isaac, Aurora, Owen, Leo, Amjad.
+
+Concept gen is due June 13. We have already done a fair amount of external and
+internal search, so the room had a lot of fragments. Spent the meeting walking
+through them by category (motion, interaction, detection plus localisation),
+writing pros and cons as we went. We did not pick anything. The full
+walkthrough lives in the rolling meeting minutes document for future
+reference. Post-meeting action is to move all of it into a morphological chart
+so we can start building combinations.
+
+## Driving questions
+
+- How many motors can we stuff on the payload?
+- How configurable is the bottom of the plane?
+- Do we want to give up on the flight time bonus in favour of making sure we get the payload delivered and captured perfectly (take our time)?
+
+## Next
+
+- Move every concept fragment into the morphological chart (image to be drawn).
