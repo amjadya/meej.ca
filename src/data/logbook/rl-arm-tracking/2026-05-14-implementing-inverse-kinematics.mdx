@@ -1,0 +1,142 @@
+---
+title: Implementing inverse kinematics
+date: 2026-05-14
+summary: >
+  Built the Jacobian pseudo-inverse IK solver. It drives the Panda's
+  wrist to a hardcoded 3D target, and degrades as expected when the
+  target is out of reach. This is the foundation for both the classical
+  baseline and the RL Cartesian action wrapper.
+tags: [research, experiment]
+draft: false
+---
+
+## What I'm trying to achieve
+
+Get the IK set up.
+
+## Background & research
+
+### Firstly, what is inverse kinematics?
+
+In short, it's guided trial and error. Instead of *forward-calculating* the rotation of each joint in the arm to reach a target position... you do it *backwards*. Move a joint around a little, see if it got you closer to your end state and reduce your errors.
+
+### What are we considering the tip of the arm?
+
+Every MuJoCo body has a frame attached to it (an origin + an orientation), and data.xpos[body_id] gives you that frame's origin as world coordinates: just (x, y, z). I'm going to pick the hand body origin. (Basically, the wrist is the end-effector body for now.) This is a good way to de-scope to give myself the best chances of launching this.
+
+### How do we handle joint limits?
+
+Joint limits are not symmetric. Most joints can swing -166° to +166°, but two are weird:
+- joint4 is always negative: range [-3.0718, -0.0698] (the elbow can only bend one way)
+- joint6 is always positive: range [-0.0175, 3.7525] (the wrist pitch only goes one way)
+
+This means I'm going to have to pull `model.jnt_range` at runtime and clamp every iteration to make sure my IK solution doesn't push a joint beyond its valid range.
+
+### What's the Jacobian going to be?
+
+#### Some context first:
+For the arm, two quantities matter to us right now:
+- `q`, the joint vector. For Panda's 7 arm joints, q is a 7-element vector of angles: `q` = [θ1, θ2, θ3, θ4, θ5, θ6, θ7].
+- `p`, the tip position in world coordinates. A 3-element vector: `p` = [x, y, z].
+
+Forward kinematics is the function `p = f(q)`: "given the joint angles, where is the tip?" Computing `f` is straightforward... it just boils down to using your angles to find components and sum them. MuJoCo does this for us when we call `mj_forward`.
+
+#### How the Jacobian is different:
+The Jacobian tries to answer:
+> If I wiggle a joint a lil... how does the end-effector body respond?
+
+It's a 3×7 matrix, and you can wrap your head around it in two ways:
+
+1. **By columns:** column `j` is "if I rotate only joint `j` by 1 radian, the tip would move by this 3D vector." So column 1 might be [0.5, 0.0, 0.0] meaning "joint 1 rotation moves the tip mostly in +x." Column 4 might be [0.0, 0.3, -0.4] meaning "joint 4 moves the tip in the y-z plane." Each column tells you how sensitive that joint is in each direction.
+2. **By rows:** row `i` is "to change x (or y, or z) of the tip, here's how much each joint contributes." Row 1 (x): [0.5, 0.2, 0.0, 0.0, 0.1, 0.0, 0.0] says "joints 1, 2, and 5 are the ones that affect x at this configuration (and by *this* amount)."
+
+#### The sauce:
+`dp = J · dq`
+
+It's just this. This reads as: *small change in the tip's position is the Jacobian times a small change in the angles*.
+
+Note: THE JACOBIAN IS NOT CONSTANT! It must change with every iteration (so we have to recompute it every step). If it isn't clear why this is the case, picture the arm in  different positions and imagine how small changes in a particular angle will change the end position. It becomes clearer that the current state of the arm is important in determining the effect small changes in the joints. (We're looking at the absolute effect of each joint wiggle here, not the relative effect.)
+
+Each entry in matrix form is:
+
+`J[i,j] = ∂p_i / ∂q_j`
+
+Notice, the entries are in terms of partial derivatives.
+
+#### Why do we care?
+For IK, we know the desired tip motion `dp` (target position minus current position) and want to figure out the joint motion `dq` to make it happen. So we need to invert the relationship: `dq = J⁻¹ · dp`.
+
+Unfortunately... inverting matrices that aren't square is difficult.
+
+#### The Moore-Penrose pseudo-inverse:
+There are three world coordinates and seven joints. We're under-constrained! This means there are infinitely many ways to orient the arm in order to reach an end target. (Similarly, there are infinite ways for you to orient your body in order to draw a point on a piece of paper.)
+
+The Moore-Penrose pseudo-inverse is a way to invert the Jacobian which gives you  `dq = J⁻¹ · dp` where `dq` is guaranteed to have the smallest magnitude it could have had in the infinitely many solutions. We call this special inverted Jacobian `J⁺`, where:
+`J⁺ = J^T · (J · J^T)⁻¹`
+
+Giving us:
+`dq = J⁺ · dp`
+or, in other words
+`dq = J⁺ · (target − current_tip)`
+
+Lastly, we can track the current state of the angles as `q`, and denote that `q` changes with every frame of the Jacobian calculation by:
+
+`q += step · dq` -- here, "step" is some coefficient less than 1 which lets us control how much of an impact each frame has on the new position. Consider it a smoothing factor.
+
+#### The sad catch:
+A "singularity" is a configuration where J loses rank. This is a risk if the arm is fully stretched out (the elbow can't help reach further along that direction). In those poses, J · J^T becomes near-singular, its inverse blows up, and the resulting `dq` goes to infinity. Numerically: the arm thrashes, joints fly past their limits, gripper shoots across the room.
+
+There are a few common fixes, one being damped least squares (DLS):
+
+  J⁺_dls = J^T · (J · J^T + λ²·I)⁻¹
+
+  That λ²·I term (with λ ~ 0.01) adds a bias to the diagonal that keeps the matrix invertible everywhere. Trade-off: near singularities the result becomes "approximate but
+  stable" instead of "exact but exploding." Apparently, this approach is super important in industry.
+
+  For our script, we can use `numpy.linalg.pinv(J)` to compute the Moore-Penrose pseudo-inverse via SVD and handle near-singularities gracefully by dropping singular values below a tolerance.
+
+  We can always swap to explicit DLS later if we hit instability... Let's just see what happens for now.
+
+#### Neat, so what would the code look like?
+
+Use:
+
+`mujoco.mj_jac(model, data, jacp, jacr, point, body)`
+
+| Arg   | Role   | What it is                                                |
+| :---- | :----- | :-------------------------------------------------------- |
+| model | input  | The MjModel we loaded                                     |
+| data  | input  | The MjData with current state                             |
+| jacp  | output | 3×nv array: translational Jacobian (this is what we want) |
+| jacr  | output | 3×nv array: rotational Jacobian (we'll ignore)            |
+| point | input  | A 3D point in world coords whose Jacobian we want         |
+| body  | input  | The body ID that point is rigidly attached to             |
+
+So what's going on with the `jacr`? I've been lying to you. Technically the Jacobian gives us XYZ and yaw pitch roll. In this case, MuJoCo is offering two separate matrices instead of a bigger six-rowed one. Regardless, we decided yesterday that we don't care about the orientation of the arm, just the position, so we're going to ignore that second Jacobian matrix!
+
+Also note: `mj_jac` doesn't return the Jacobian, it writes into pre-allocated arrays you hand it like a C-style API. This means we allocate `jacp` and `jacr` once, hand them in each iteration, and read the result out of just `jacp` afterward. (Forced to include `jacr` even though we're not using it.)
+
+And another note: `nv` = 9, not 7 like I was implying earlier... the two finger joints count as DOFs. So `jacp` is 3×9. But the fingers are downstream of the hand body (just hangin' there), so wiggling them doesn't move the hand origin. This means the last two columns of `jacp` will be zero. Nothing to worry about, just something to note.
+
+## Experiment
+
+See [github](https://github.com/amjadya/rl-arm-tracking/blob/main/ik_demo.py)!!! Also check these videos out:
+
+<video src="/videos/IK_sol_demo.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
+
+It works!
+
+<video src="/videos/IK_no_sol_demo.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
+
+And check out the behaviour when the target is beyond what the arm can reach. This matches our research.
+
+## Driving questions
+
+- Does the chosen reward shape `||target − ee|| − α·||action||` actually produce smooth motion, or will it need extra terms (per-axis weighting, derivative)? Still open.
+- How exactly will I fold IK into the reward system for the RL?
+- How will I map out a trajectory for the classical PD controller I will implement first?
+- When should I start training RL?
+
+## Next
+
+- Close out the classical model by implementing a PD controller.
