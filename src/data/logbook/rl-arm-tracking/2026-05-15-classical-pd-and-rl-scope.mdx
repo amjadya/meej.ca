@@ -1,0 +1,108 @@
+---
+title: Turning physics on, and a nagging decision
+date: 2026-05-15
+summary: >
+  Turned dynamics on for the first time with a classical IK + PD
+  controller tracking a moving circle, and found the Panda's actuators
+  are already PD tuned. Now weighing how much RL to take on before the
+  deadline.
+tags: [research, experiment]
+draft: false
+---
+
+## What I'm trying to achieve
+
+Today's goal is to close out classical methods for controlling the robot arm using PD control. That means I need to map a trajectory and move the arm along that path.
+
+## Context
+
+Until now, we have not touched any real *physics*. The `mj_forward` function we've been calling has only ever been rotating actuators directly. No forces!
+
+With yesterday's inverse kinematics, we essentially created a geometry calculator. Very neat, but not very useful alone.
+
+#### Introducing PD control!
+
+`τ = Kp·(q_des − q) − Kd·q̇`
+
+| Term      | Quantity                               | Units       |
+| :-------- | :------------------------------------- | :---------- |
+| q_des - q | angle error                            | rad         |
+| Kp        | stiffness, torque per radian of error  | N·m / rad   |
+| q-dot     | joint angular velocity                 | rad/s       |
+| Kd        | damping, torque per unit angular speed | N·m·s / rad |
+| τ         | torque                                 | N·m         |
+
+We're reusing yesterday's IK to solve for the `data.qpos` which gives the desired `data.xpos[hand_id]`, it's not instant but it's fast enough to give us a `q_des` for each joint. We can feed that `q_des` into our PD controller formula above to figure out the right torque to apply to each joint.
+
+## Research
+
+#### What does the trajectory look like?
+I'll create a moving point. If I take the error between the arm and the moving target, I'll have a trajectory. Clean.
+
+#### Oh no way... the arm is already PD tuned:
+`τ = 4500·(ctrl − q) − 450·q̇` &lt;- does this look familiar?
+
+It's the same equation we defined above, just with `Kp` and `Kd` given to us! It was in the XML file. MuJoCo runs it every `mj_step`, on each joint. Awesome!
+
+#### How are the IK and PD loop synced?
+IK feeds the PD, but IK also needs time to compute the best `data.qpos`... we can run both in parallel and always feed the best IK-generated `data.qpos` to the PD loop... or we can be **blocking**.
+
+I'm just going to let the IK run all the way (it'll be super fast anyway) before feeding the PD.
+
+## The nagging feeling & clarifying earlier logs
+
+My earlier logs were confusing. I stated that the RL would operate purely in Cartesian space, and I claimed I would reuse the IK loop. I was planning on **always** using IK + PD (in both the classical and RL case).
+
+I'm having second thoughts about this approach, and here's why:
+
+a) In the IK + PD (classical controller), we have a delta which we calculate directly with:
+
+```
+current = data.xpos[hand_id]
+
+error = TARGET - current
+```
+
+Then we run this error through IK (the geometry solver). We take that output and run it through PD (the physics solver, done through `mj_step`). This gives us a smooth control loop.
+
+b) With RL, I was planning on letting the model choose the right value to feed to IK. I wrote that I was even going to give it `error` (same as above), and reward it for finding a *better* error that stabilised the arm downstream. Basically... I'd be training RL to learn a feed-forward correction.
+
+This might be too easy... and it depends on the trajectory I choose. But it's nagging at me... *this is an RL challenge*, after all.
+
+To summarise, I have four options here:
+
+|     | Name          | Geometry solved by | Dynamics solved by | Difficulty                              |
+| :-- | :------------ | :----------------- | :----------------- | :-------------------------------------- |
+| iv  | RL + IK + PD  | IK                 | PD                 | trivial, RL only guides on top          |
+| iii | RL + PD       | RL                 | PD                 | medium, RL discovers inverse kinematics |
+| ii  | IK + RL       | IK                 | RL                 | medium, RL learns the torque/dynamics   |
+| i   | RL end-to-end | RL                 | RL                 | hard, RL learns both                    |
+
+Options (iii), (ii), and (i) are all more impressive than what I had in mind. I'm struggling to decide right now... the risk of over-reaching is simply too great.
+
+## Experiment
+
+I deferred the scope decision to tomorrow.
+
+1. I refactored the `ik_demo.py` into `ik.py` so I could reuse it.
+2. I introduced `pd_demo.py`
+
+Here's the <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/pd_demo.py" target="_blank" rel="noopener noreferrer">GitHub link</a>, and here are some videos:
+
+<video src="/videos/pd_tracking_demo.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
+
+*The arm tracking a moving circle with a little lag. Computing the angles and physics each step pulls it off the ideal path.*
+
+<video src="/videos/pd_out_of_reach_demo.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
+
+*The arm responding to a trajectory beyond its joint limits.*
+
+## Driving questions
+
+- Which of the four options (RL+IK+PD, RL+PD, IK+RL, or RL end-to-end) gives me real RL learning while still fitting the submission deadline?
+- How can I improve the visualisation's performance?
+- How can I improve the visualisation's aesthetics?
+
+## Next
+
+- Choose the extent to which I'm using RL.
