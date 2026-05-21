@@ -1,0 +1,262 @@
+---
+title: Comparing classical vs RL, then mixing in new trajectories
+date: 2026-05-20
+summary: >
+  Got the first side-by-side classical vs RL comparison out the door: RL is
+  ~30% tighter on mean error and spends 15 more points of time in the 5 cm band, but
+  jerkier. Moved the tracked point to a green tip site past the gripper,
+  tried DLS for the IK folding issue (no effect), then added a figure-8 and
+  a random-walk "fly" trajectory and kicked off a 5M-step retrain with a
+  self-collision penalty.
+tags: [experiment, decision]
+draft: false
+---
+
+## What I'm trying to achieve
+
+I want to begin today by comparing yesterday's RL lead setter to the classical IK + PD baseline we created.
+
+I want to extend the existing `eval.py` to:
+1. Render side by side
+2. Sync both simulations
+3. Print useful stats to terminal
+
+Once I'm happy there, I want to improve the position of the end-effector to make tracking easier to see. I plan on pushing the `ee` a little beyond the gripper and adding a green sphere rigidly fixed to the model.
+
+This way we're not clipping the red ball when leading it.
+
+## Experiment & decisions
+
+### Rendering side-by-side
+
+Should I do multiple panes? Maybe I should just put two arms in the same view... which option lets me ship the fastest?
+
+If I do multiple panes, I think I will run into trouble syncing them later on... but if I pick two arms in the same view I have to refactor applying a setpoint via `IK` to accept the case where I have `action` and the case where I don't if I want to be conscious of the quality of my code... (Headaches.) I'm going to see what I can do with two different viewers.
+
+#### Two viewers
+
+First I need to check if MuJoCo even lets me open two passive viewers in the same process. I'm going to build a script that:
+
+  1. Loads two `MjModel` instances (single-arm Panda each)
+  2. Opens two passive viewers
+  3. Steps physics in both for 3 seconds
+  4. Exits cleanly
+
+Let's call it `smoke_two_viewers.py`.
+
+Running it threw the error:
+
+```fish
+timeout 10 uv run python smoke_two_viewers.py
+```
+
+```text
+'Wayland: The platform does not provide the window position'
+'EGL: The context must be current on the calling thread when swapping buffers'
+```
+(See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/archive/smoke_two_viewers.py" target="_blank" rel="noopener noreferrer">`smoke_two_viewers.py` on GitHub</a> for implementation details.)
+
+That's fine, just means we need to create two separate scripts and run them in two different terminals. This makes me think I should create a new `ikpd.py` based on the `pd_demo.py` which loads the `MjModel` and `MjData`, runs IK separately, and loads the same trajectory (using a deterministic seed).
+
+Now I can build `ikpd.py` which has two modes:
+
+1. **With `--seed N`**: single run on the seeded trajectory, logs every step to `runs/ikpd_seed{N}.csv`, then exits. This is the apples-to-apples mode that pairs with `eval.py --seed N`.
+2. **Without `--seed`**: forever-loop demo. Each pass draws a fresh random trajectory and runs the controller against it. No logging. Good for eyeballing behaviour in the viewer.
+
+`--headless` skips the viewer and real-time pacing so I can bulk-collect CSVs without watching them play out.
+
+Running it in the "forever" mode showed me the collision issue from yesterday isn't an RL failure, it's an IK problem with the warm-started position. Flagging this as something to fix.
+
+<video src="/videos/ikpd_forever_collision.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
+
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/ikpd.py" target="_blank" rel="noopener noreferrer">`ikpd.py` on GitHub</a>.
+
+### Recording useful stats
+
+We should store key metrics in a `CSV` so we can compare against `eval.py`. Ooo I should build a `metrics.py` and import the function in `eval.py` too.
+
+| Column                             | Meaning                                                                      |
+| :--------------------------------- | :--------------------------------------------------------------------------- |
+| `t`                                | trajectory time (s)                                                          |
+| `target_x`, `target_y`, `target_z` | desired EE position                                                          |
+| `ee_x`, `ee_y`, `ee_z`             | actual EE position                                                           |
+| `err`                              | &#124;&#124;target - ee&#124;&#124; (precomputed for convenience and sanity) |
+| `in_reach`                         | bool: is target within `R_REACH` of `SHOULDER`?                              |
+
+We already have a function in `trajectory.py` that gives us the percentage of a full trajectory in reach. Let's also log a per-step `in_reach` boolean so we know what's up at any given snapshot.
+
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/metrics.py" target="_blank" rel="noopener noreferrer">`metrics.py` on GitHub</a>.
+
+### Refactor sidetrack
+
+I want to move old stuff into an `archive/` folder so I don't clutter the root dir.
+
+1. Moved old files to `archive/`.
+2. Moved trajectory rendering logic outside of `eval.py` and `ikpd.py`.
+3. Created a `config.py` for useful params I might wanna change later.
+
+The archived demos (`pd_demo.py`, `ik_demo.py`, `hello_arm.py`, `smoke_two_viewers.py`, `verify_length.py`) still work as standalone scripts. If anyone really wants to run one, call it by its relative path from the repo root:
+
+```fish
+uv run python archive/pd_demo.py
+```
+
+They're frozen at their pre-refactor state and aren't imported by anything live.
+
+Now back to building a comparison system.
+
+### Comparing RL to classical as it stands right now
+
+```fish
+for s in (seq 0 9) 
+    uv run python ikpd.py --seed $s --headless 
+    uv run python eval.py --seed $s --headless 
+end
+```
+
+Then `uv run python metrics.py`:
+
+```text
+n=10 pairs  duration=5.00s
+────────────────────────────────────────────────────────────────────────────
+Metric                          Classical (μ±σ)      RL+Lead (μ±σ)        Δμ
+────────────────────────────────────────────────────────────────────────────
+Mean error (cm)                   14.21 ±  7.40      10.44 ±  5.23     -3.77
+RMSE error (cm)                   18.60 ±  9.49      15.69 ±  8.15     -2.91
+Max error (cm)                    67.68 ± 27.51      67.33 ± 27.45     -0.35
+Time in 5cm band (%)              24.70 ± 38.25      39.76 ± 20.17    +15.06
+Err in-reach (cm)                 14.21 ±  7.39      10.58 ±  5.28     -3.63
+Err out-of-reach (cm) (1/10)      25.74 ±  0.00       7.21 ±  0.00    -18.53
+Jerk RMS (m/s³)                  552.30 ± 393.20     725.91 ± 471.72   +173.61
+```
+
+OK! So we're winning on tracking BIG! Our error is down and our time in the 5cm band is way up.
+
+A bit more on what's in the table:
+
+- **RL wins tracking.** Mean error is down 3.77 cm and time in the 5 cm band jumps from 24.7% to 39.8% (a 15-point jump). RMSE is also tighter and the std on the band metric collapses from 38.25 to 20.17, so RL is both better on average and more consistent across trajectories.
+- **RL loses smoothness.** Jerk RMS is up 174 m/s³ (about 33%). That's a real cost: in hardware it would show up as motor wear and visible jitter on the end-effector. It's the price of the policy nudging the IK target every tick.
+- **Both fail the same on the hard parts.** Max error is essentially tied at ~67 cm. Those spikes are almost certainly from out-of-reach moments or IK landmines that neither controller handles well.
+- **Out-of-reach split has no data yet.** Only 1 of 10 trajectories ever crossed the reach boundary. The `Δ = -18.53` is a sample size of one. The next training run needs trajectories that go out of reach more often.
+
+Next I'll need to retrain on new trajectories with a small collision penalty.
+
+### Moving the EE to a tip site
+
+Now it's time to patch up my model. I don't like that I'm tracking the hand instead of a useful EE point so I'll have to edit the panda XML via `MjSpec`.
+
+I went with a green sphere site rigidly attached to the `hand` body, offset 10 cm along the gripper's local +Z axis (which points "down" past the fingers in the panda's home pose). All three of `env.py`, `ikpd.py`, and `eval.py` now go through a single `arm_model.load_arm_model()` that loads the panda spec, injects the site, compiles, and returns `(model, data, tip_id)`. IK was also swapped to drive the site directly (`mj_jacSite` + `data.site_xpos`), so the tip is the quantity being tracked.
+
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm_model.py" target="_blank" rel="noopener noreferrer">`arm_model.py` on GitHub</a>.
+
+### Trying DLS on the IK folding
+
+Now I want to address the IK folding the arm into itself. I can kind of get RL to train around it, but it's bottlenecked by IK blowing up near singularities. We predicted this early on, and it's time to see what happens if we use DLS instead of pinv.
+
+```text
+n=10 pairs  duration=5.00s
+────────────────────────────────────────────────────────────────────────────
+Metric                               Pinv (μ±σ)          DLS (μ±σ)        Δμ
+────────────────────────────────────────────────────────────────────────────
+Mean error (cm)                   12.88 ±  6.60      12.90 ±  6.58     +0.02
+RMSE error (cm)                   17.15 ±  8.93      17.19 ±  8.91     +0.04
+Max error (cm)                    65.04 ± 25.41      65.04 ± 25.42     +0.00
+Time in 5cm band (%)              26.00 ± 39.11      25.90 ± 39.07     -0.10
+Err in-reach (cm)                 13.16 ±  7.11      13.19 ±  7.09     +0.02
+Err out-of-reach (cm) (1/10)      14.02 ±  0.00      13.92 ±  0.00     -0.10
+Jerk RMS (m/s³)                  575.74 ± 376.35     527.41 ± 321.16    -48.33
+```
+
+Hmm.... basically didn't do anything, and that's ok. Just means IK happily picks folded joint configurations that are feasible but route the arm through itself. I'm going to set this aside for now. Maybe I can compensate for the poor IK by issuing a penalty in training for collisions. The model will learn to use its lead budget to steer the `ee` away from tangled positions.
+
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/ik.py" target="_blank" rel="noopener noreferrer">`ik.py` on GitHub</a>.
+
+Let's pivot and give our model more trajectories for training and validation.
+
+### Updating `trajectory.py`
+
+We're going to introduce a figure-8, and a random walk in 3D space.
+I'll use splines to model a fly that spawns within a sphere and wanders randomly.
+
+#### Figure-8
+```text
+x(s) = sin(s) 
+y(s) = sin(s) · cos(s)
+```
+
+Simple parametric curve that looks like a figure-8.
+
+#### Fly
+Just a spline connecting 6 random points in the operable radius of the arm.
+
+#### Tuning the difficulty
+
+I want each shape to dip out of reach about 10% of the time. A trajectory's `reach_fraction` is the share of its sample points that sit within the arm's reachable sphere (`R_REACH = 0.85 m` around `SHOULDER`). 1.0 means fully reachable; less than 1.0 means some chunk left the sphere. "any-out" below is shorthand for `reach_fraction < 1.0`.
+
+Two parameters I swept:
+
+- `FIG8_SIZE_RANGE[1]`: the upper end of the figure-8 size range (the lower end stays at 0.10 m).
+- `FLY_BALL_R`: radius of the sphere the fly waypoints are sampled from.
+
+For each candidate value, I generated 500 random trajectories and counted any-out. `FLY_BALL_R` is sharp because the Catmull-Rom spline overshoots its waypoints: a 2 cm shift flips ~30% of trajectories.
+
+Final any-out rates (500 trajectories per setting):
+
+- circle: 8.2%
+- fig8: 12%
+- fly: 11%
+- (no fully-impossible trajectories: every one has some in-reach portion)
+
+<video src="/videos/new_trajectories_demo.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
+
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/trajectory.py" target="_blank" rel="noopener noreferrer">`trajectory.py` on GitHub</a>.
+
+### Retraining with collision penalty
+
+I updated `train.py` to train longer because we have way more new trajectories. I also added a collision penalty. Let's see! This should take over an hour, in the meantime I'll polish this log lol.
+
+```fish
+uv run python train.py
+```
+
+Here we go!
+
+The collision term lives in `env.py` and reads contact penetration depth from `data.contact` each step, summing it across all self-contact pairs and subtracting `k * total_penetration` from the reward (`k = 10`). 1 cm of overlap costs the same as 10 cm of tracking error, which feels like a balanced starting point.
+
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/env.py" target="_blank" rel="noopener noreferrer">`env.py` on GitHub</a> and <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/train.py" target="_blank" rel="noopener noreferrer">`train.py` on GitHub</a>.
+
+### CLI flags I added today
+
+It's a lot to track, so here's the current set of flags across the files I edited today:
+
+| File | Flag | Default | Purpose |
+|------|------|---------|---------|
+| `ikpd.py` | `--seed N` | none | Seeded run, logs CSV, exits. |
+| `ikpd.py` | `--run_duration` | `RUN_DURATION_S` (5.0 s) | Seconds per run. |
+| `ikpd.py` | `--headless` | off | Skip viewer + sleep. Requires `--seed`. |
+| `ikpd.py` | `--damping` | 0.05 | IK damping for DLS. `0` = pure pinv. |
+| `ikpd.py` | `--label` | `ikpd` | CSV filename prefix: `runs/{label}_seed{N}.csv`. |
+| `ikpd.py` | `--traj` | `random` | One of `circle`, `fig8`, `fly`, `random`. |
+| `eval.py` | `--model` | `./checkpoints/best/best_model.zip` | Policy checkpoint to load. |
+| `eval.py` | `--seed N` | none | Seeded run, logs CSV, exits. |
+| `eval.py` | `--run_duration` | `RUN_DURATION_S` (5.0 s) | Seconds per run. |
+| `eval.py` | `--headless` | off | Skip viewer + sleep. Requires `--seed`. |
+| `eval.py` | `--traj` | `random` | One of `circle`, `fig8`, `fly`, `random`. Matches `ikpd.py --traj` for like-for-like compares. |
+| `metrics.py` | `runs_dir` (positional) | `runs` | Directory to scan. |
+| `metrics.py` | `--prefix-a` | `ikpd` | First CSV prefix to pair. |
+| `metrics.py` | `--prefix-b` | `eval` | Second CSV prefix to pair. |
+| `metrics.py` | `--label-a` | `Classical` | Column label in the summary table. |
+| `metrics.py` | `--label-b` | `RL+Lead` | Column label in the summary table. |
+
+## Driving questions
+
+- Does the collision penalty actually teach the policy to dodge IK landmines, or does it just shift the reward floor down without changing behaviour?
+- Is 5M steps enough for the harder env (three trajectory types + collision term)?
+- If collisions persist after retraining, do we revisit a null-space posture cost on IK?
+- Where does `max_lead = 0.15 m` break, especially if the policy ends up trapped in a knotted configuration with no good lead direction?
+
+## Next
+
+- Let the 5M-step training finish and re-run the same 10-seed A/B against `ikpd.py` on the new best model.
+- If collision rate is still high, prototype the null-space posture cost in `solve_ik`.
+- Stretch: try a pure RL architecture (joint-angle output, no IK) and see if it self-organises around collisions.
