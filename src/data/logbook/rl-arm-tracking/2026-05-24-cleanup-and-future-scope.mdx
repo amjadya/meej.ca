@@ -1,0 +1,109 @@
+---
+title: Submission and future scope of work
+date: 2026-05-24
+summary: >
+  Polished the GitHub repo for submission (library code into an `arm/` package,
+  dead code removed, proper README pointing at this build log). Then some thoughts on
+  GPU training, ripping out IK, learning physics directly, and comments on RL's
+  observation space.
+tags: [reflection]
+draft: false
+---
+
+## What I'm trying to achieve
+
+Get the <a href="https://github.com/amjadya/rl-arm-tracking" target="_blank" rel="noopener noreferrer">GitHub repo</a> polished for submission, and write down all the future
+scope of work I want to remember. There are a lot of thoughts floating around
+across the previous logs and I want to pull them into one place before pressing
+submit.
+
+## Repo cleanup
+
+Quick pass on the code before submission:
+
+- Moved the library code into an `arm/` package: `env`, `ik`, `metrics`,
+  `trajectory`, `arm_model`, `config`. Much less intimidating to land on.
+- Killed some dead code (does that mean it died twice?). 
+- Wrote a README with the v9 vs classical headline table up top, design
+  choices for state / action / reward, and some links back to this build log.
+
+## Future scope of work
+
+### Faster training: JAX + MuJoCo Warp, or Isaac Lab
+
+I almost ported to JAX + MuJoCo Warp on May 22nd (see the log from that day for
+the full investigation). The win would be thousands of times faster
+training on a GPU instead of CPU. I passed because the rewrite cost was too
+much for the remaining time before submission.
+
+Isaac Lab is the other option people use. Apparently great for GPU-parallel
+envs. Either way, GPU-scale parallelism is the prerequisite for any of the
+more ambitious things below.
+
+### Rip out IK entirely
+
+Right now the policy outputs a Cartesian lead vector. IK turns that into joint
+angles. The IK has no concept of the arm's body, so the EE gets commanded into
+positions that cause self-collision.
+
+If I let the policy output joint angles directly, RL can learn to avoid those
+positions on its own. Cost: probably ~50M steps to even start understanding,
+~200M to converge to something useful. Not doable on CPU. Not doable without
+the JAX/Warp migration first.
+
+I'm really proud that I have a good intuition for these step counts now. I had none
+of this two weeks ago. Estimating "this should take ~50M steps based on the
+observation dimensionality and the reward shape" is a skill I built here. Super useful 
+for other RL projects I carry on with.
+
+### Rip out PD too: teach the model physics
+
+The PD gains come from the Panda MJCF (loaded via the `robot_descriptions`
+package). The arm moves at whatever rate the tuning permits. A bigger reach:
+skip PD entirely, give the policy direct torque control, reward smoothness
+explicitly. Probably ~1-3B steps to converge on a policy that has learned the
+physics directly. At that point it should be strictly smoother than classical
+because it's not bound by anyone else's tuning choices.
+
+### What RL has access to that classical does not
+
+The two controllers don't have access to the same information. The RL policy
+gets target velocity and target acceleration in its observation space
+(closed-form analytical derivatives from the parametric trajectory generators).
+The classical IK+PD baseline doesn't get either. It just chases the live
+target.
+
+If I gave the classical baseline the same forward-prediction capability,
+something like an analytical lead based on velocity and acceleration, it would
+narrow the gap. Maybe beat RL on the parametric shapes.
+
+For circle and figure-8 I could derive the lead
+analytically with normal kinematics. For the fly trajectory (random
+Catmull-Rom splines through random waypoints in a ball), there's no
+closed-form lead. 
+
+If I can't teach a classical model to lead complex trajectories, make RL figure
+it out instead. And it did. 73% of the time within the 5 cm band vs 24% for
+classical. Roughly a free 50 percentage points of accuracy for an hour of
+training. (Well... several hours to get to this point but you get the idea.)
+
+### This experience and my own test set
+
+I feel like an RL model that learned to generalise. The whole pipeline (finite-difference
+EE velocity, RL fitting through noisy observations) has the same shape
+as a real-world sensor stack. An IMU plus calibration plus finite differences
+gives you noisy velocity and acceleration estimates. Feed those into a policy
+and let RL pull out whatever signal you're looking for in the noise.
+
+Now that I know how these models work and how to set them up, this is
+something I can do in a lot of contexts.
+
+## Driving questions
+
+- How much of the remaining self-collision problem can RL solve on its own once IK is removed?
+- Is Isaac Lab actually a better steppingstone than JAX + MuJoCo Warp for someone migrating from PyTorch?
+- If I gave the classical baseline an analytical lead derived from target velocity / acceleration, how much of the RL advantage would survive on the fly trajectory specifically?
+
+## Next
+
+- Press submit.
