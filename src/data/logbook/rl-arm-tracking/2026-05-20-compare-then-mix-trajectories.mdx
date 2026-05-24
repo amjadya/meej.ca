@@ -85,7 +85,7 @@ We should store key metrics in a `CSV` so we can compare against `eval.py`. Ooo 
 
 We already have a function in `trajectory.py` that gives us the percentage of a full trajectory in reach. Let's also log a per-step `in_reach` boolean so we know what's up at any given snapshot.
 
-See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/metrics.py" target="_blank" rel="noopener noreferrer">`metrics.py` on GitHub</a>.
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/metrics.py" target="_blank" rel="noopener noreferrer">`metrics.py` on GitHub</a>.
 
 ### Refactor sidetrack
 
@@ -147,7 +147,7 @@ Now it's time to patch up my model. I don't like that I'm tracking the hand inst
 
 I went with a green sphere site rigidly attached to the `hand` body, offset 10 cm along the gripper's local +Z axis (which points "down" past the fingers in the panda's home pose). All three of `env.py`, `ikpd.py`, and `eval.py` now go through a single `arm_model.load_arm_model()` that loads the panda spec, injects the site, compiles, and returns `(model, data, tip_id)`. IK was also swapped to drive the site directly (`mj_jacSite` + `data.site_xpos`), so the tip is the quantity being tracked.
 
-See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm_model.py" target="_blank" rel="noopener noreferrer">`arm_model.py` on GitHub</a>.
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/arm_model.py" target="_blank" rel="noopener noreferrer">`arm_model.py` on GitHub</a>.
 
 ### Trying DLS on the IK folding
 
@@ -169,7 +169,7 @@ Jerk RMS (m/s³)                  575.74 ± 376.35     527.41 ± 321.16    -48.3
 
 Hmm.... basically didn't do anything, and that's ok. Just means IK happily picks folded joint configurations that are feasible but route the arm through itself. I'm going to set this aside for now. Maybe I can compensate for the poor IK by issuing a penalty in training for collisions. The model will learn to use its lead budget to steer the `ee` away from tangled positions.
 
-See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/ik.py" target="_blank" rel="noopener noreferrer">`ik.py` on GitHub</a>.
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/ik.py" target="_blank" rel="noopener noreferrer">`ik.py` on GitHub</a>.
 
 Let's pivot and give our model more trajectories for training and validation.
 
@@ -209,7 +209,7 @@ Final any-out rates (500 trajectories per setting):
 
 <video src="/videos/new_trajectories_demo.mp4" muted controls style="max-height:400px; object-fit:cover"></video>
 
-See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/trajectory.py" target="_blank" rel="noopener noreferrer">`trajectory.py` on GitHub</a>.
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/trajectory.py" target="_blank" rel="noopener noreferrer">`trajectory.py` on GitHub</a>.
 
 ### Retraining with collision penalty
 
@@ -223,7 +223,7 @@ Here we go!
 
 The collision term lives in `env.py` and reads contact penetration depth from `data.contact` each step, summing it across all self-contact pairs and subtracting `k * total_penetration` from the reward (`k = 10`). 1 cm of overlap costs the same as 10 cm of tracking error, which feels like a balanced starting point.
 
-See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/env.py" target="_blank" rel="noopener noreferrer">`env.py` on GitHub</a> and <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/train.py" target="_blank" rel="noopener noreferrer">`train.py` on GitHub</a>.
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/env.py" target="_blank" rel="noopener noreferrer">`env.py` on GitHub</a> and <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/train.py" target="_blank" rel="noopener noreferrer">`train.py` on GitHub</a>.
 
 ### CLI flags I added today
 

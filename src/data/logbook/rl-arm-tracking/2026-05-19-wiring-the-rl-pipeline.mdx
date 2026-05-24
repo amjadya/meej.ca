@@ -117,7 +117,7 @@ Something to think about: what happens when the trajectory passes through the
 arm's own body? I'll defer this and treat it as an "unreachable position" for
 now.
 
-See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/trajectory.py" target="_blank" rel="noopener noreferrer">trajectory.py on GitHub</a>.
+See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/trajectory.py" target="_blank" rel="noopener noreferrer">trajectory.py on GitHub</a>.
 
 ### `env.py`
 
@@ -135,7 +135,7 @@ Two design choices that don't have a "right" answer:
   giving 5 physics ticks per control tick.
 
 The rest of `env.py` fell out naturally once the MDP, Gymnasium, and PPO
-concepts above were settled. See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/env.py" target="_blank" rel="noopener noreferrer">env.py on GitHub</a>.
+concepts above were settled. See <a href="https://github.com/amjadya/rl-arm-tracking/blob/main/arm/env.py" target="_blank" rel="noopener noreferrer">env.py on GitHub</a>.
 
 ### `train.py`
 
