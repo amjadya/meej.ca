@@ -1,0 +1,30 @@
+---
+title: It continues...
+date: 2026-08-05
+summary: "momentum push! added .clang-format to match Google conventions"
+tags: ["quick!"]
+draft: false
+---
+
+## What I'm trying to achieve
+
+Get something out!!!
+
+## Neat trick
+
+After creating your `.clang-format` file, you can batch run it on everything by 
+running your local formatting binaries on all the important scripts like so:
+
+```
+~/.local/share/nvim/mason/bin/clang-format -i include/core/*.hpp src/*.cpp
+```
+See [PR #5](https://github.com/Safwaan21/wayless/pull/5) for details.
+
+## Driving questions
+
+- What's missing for 2D car physics before I can start tinkering in the GUI?
+- Should I just start with the GUI now? Add more features later?
+
+## Next
+
+- Decide between implementing more classes (improving physics) and beginning visualizations
