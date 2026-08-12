@@ -1,0 +1,42 @@
+---
+title: Continuous Integration and Formatting
+date: 2026-08-08
+summary: "Deploying CI to our project repo."
+tags: [setup]
+draft: false
+---
+
+## What I'm trying to achieve
+
+1. Check build and formatting using GitHub Actions
+2. Create a script anyone can call to format `*.cpp` and `*.hpp` files on demand
+
+## Deploying CI on GH
+
+I made a file called `ci.yml` under `.github/workflows/`, and configured two jobs. 
+One job downloads dependencies and runs build. It yells at you if the build failed.
+
+The other does a "dry-run" of `.clang-format` to see if your files are still formatted Google Style-wise.
+This also yells at you if it fails.
+
+Both of these jobs only run when you open a PR.
+
+## Creating a formatting script
+
+I made `format.sh` which looks at 3 possible locations for the clang-format binary. 
+It works for me on my NVIM setup because I have clang-format running on-save using
+conform.nvim and mason.
+If this doesn't mean anything to you, don't worry...
+Hopefully `format.sh` works for Saf because he uses VSCode and I'm not 100% sure if 
+the path I used to find the clang-format binary is correct for him... Time will tell.
+
+## Driving questions
+
+1. I had to downgrade our version of `CMake` to avoid having the GH runners install
+a big package for every build... will this affect us in the future?
+2. To what extent did I add friction by forcing a format, and adding and forcing you to
+use an environment variable to get CMake to know where your `vcpkg` is?
+
+## Next
+
+1. I want to take a step back and start running simple UI tests. 
