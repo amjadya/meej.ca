@@ -37,25 +37,26 @@ const sorted = [...logbooks].sort((a, b) => a.order - b.order);
 				data-aos-duration="1500"
 			>
 				<h3 class="text-secondary text-base font-medium">
-					<span>Current</span>
+					<span>Project</span>
 					<span class="font-bold">logbooks</span>
 				</h3>
-				<span class="relative inline-flex h-2 w-2" aria-label="active">
-					<span
-						class="absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75 animate-ping"
-					></span>
-					<span
-						class="relative inline-flex rounded-full h-2 w-2 bg-secondary"
-					></span>
-				</span>
-				<span class="text-secondary text-xs font-mono uppercase tracking-wider"
-					>live</span
-				>
 			</div>
 		</div>
 
+		<a
+			href="/logbook"
+			class="group mt-12 flex items-center justify-between border border-secondary/40 px-4 py-3 text-secondary hover:bg-secondary hover:text-primary transition-colors"
+			data-aos="fade-up"
+			data-aos-duration="2000"
+		>
+			<span class="text-xs font-mono uppercase tracking-widest"
+				>View everything in one timeline</span
+			>
+			<span class="font-semibold">↗</span>
+		</a>
+
 		<ul
-			class="mx-auto grid grid-cols-1 sm:grid-cols-2 [grid-template-rows:auto_auto_1fr_auto_auto] text-secondary gap-x-12 gap-y-6 mt-20"
+			class="mx-auto grid grid-cols-1 sm:grid-cols-2 [grid-template-rows:auto_auto_1fr_auto_auto] text-secondary gap-x-12 gap-y-6 mt-12"
 			role="list"
 		>
 			{
@@ -72,6 +73,15 @@ const sorted = [...logbooks].sort((a, b) => a.order - b.order);
 								<div class="flex items-center gap-3 text-xs font-mono uppercase tracking-widest text-secondary/70">
 									<span>Log No. 0{index + 1}</span>
 									<span class="h-px flex-1 bg-secondary/30" />
+									{lb.status === "live" && (
+										<span class="relative inline-flex h-2 w-2" aria-hidden="true">
+											<span class="absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75 animate-ping" />
+											<span class="relative inline-flex rounded-full h-2 w-2 bg-secondary" />
+										</span>
+									)}
+									<span class={lb.status === "live" ? "text-secondary" : ""}>
+										{lb.status}
+									</span>
 									<span>
 										{count} {count === 1 ? "entry" : "entries"}
 									</span>

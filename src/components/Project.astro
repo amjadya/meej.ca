@@ -116,3 +116,12 @@ const { project, previous, next } = Astro.props;
 		</div>
 	</footer>
 </BaseLayout>
+
+<style is:global>
+	/* images sized as a percentage of the column are unreadable on a phone, so they fill it there */
+	@media (max-width: 640px) {
+		.prose img[style*="max-width"] {
+			max-width: 100% !important;
+		}
+	}
+</style>

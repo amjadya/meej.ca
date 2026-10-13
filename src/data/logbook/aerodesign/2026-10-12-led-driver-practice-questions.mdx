@@ -1,0 +1,63 @@
+---
+title: LED driver practice questions
+date: 2026-10-12
+summary: "Created a set of flashcards for some other members to learn about our LED driver."
+tags: [teaching]
+draft: false
+---
+
+import BeaconReplay from "../../../components/logbook/BeaconReplay.astro";
+
+## What I'm trying to achieve
+
+Over the last few days I have been working on creating a set of flashcards 
+other members on Aerodesign can use to self-study the LED driver we are using to
+power our beacons.
+
+Today I would like to publish them on meej.ca.
+
+## The circuit and its path to "stability"
+
+<BeaconReplay />
+
+Above is a detailed simulation I ran in ngspice, using datasheet values for our
+MOSFET and BJT. I broke it down into six distinct stages.
+
+### Stage 2... the most interesting one
+
+It's hard to fit everything in the animation, so I'll expand on what's happening in
+stage two here.
+The gate capacitance stops charging right at the threshold voltage. This is because
+with the newly opened pathway from drain-to-source, a dropping voltage on the drain side forces the current incoming from the pin (through $R_G$) to land on the drain side (only briefly).
+
+In the cards I mentioned that no steady current flows through the gate. Here we can see what the brief current is and why it exists. The gate and the drain form a small capacitor, and a capacitor passes current whenever the voltage across it is changing. During stage two the drain falls from about 25 V to about 10 V in 3.3 µs, so:
+
+$$
+I = C_{gd}\,\frac{\Delta V}{\Delta t} \approx 400\,\text{pF} \times \frac{15\,\text{V}}{3.3\,\mu\text{s}} \approx 1.8\,\text{mA}
+$$
+
+That's nearly all of the current coming from the pin:
+
+$$
+I_\text{pin} = \frac{V_\text{pin} - V_\text{gate}}{R_G} \approx \frac{5\,\text{V} - 3\,\text{V}}{1\,\text{k}\Omega} = 2\,\text{mA}
+$$
+
+With nothing left over to raise the gate, it stays flat. This brief current stops once the drain stops falling.
+
+## Driving questions
+
+- To what extent should I explain the individual components?
+- How shall I handle the "what-if" type questions people naturally have about circuits?
+  - "What if I flip the power?"
+  - "What if I forget a resistor?"
+
+## The link
+
+Spent a lot of time getting the format right...
+I settled on a set of ~55 questions.
+
+Here's the link: [meej.ca/learn/led-driver](/learn/led-driver/)
+
+## Next
+
+- Send this off to the new recruits and hope it was useful!

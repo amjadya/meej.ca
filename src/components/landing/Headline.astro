@@ -1,0 +1,459 @@
+---
+import { getCollection } from "astro:content";
+import { headline } from "../../data/headline";
+import { glossary } from "../../data/glossary";
+import { Image } from "astro:assets";
+import still from "../../assets/logbook/baddy-bot/hero-path.png";
+
+const DAY = 86400000;
+const start = Date.parse(headline.start);
+const end = Date.parse(headline.end);
+const today = Date.UTC(
+	new Date().getUTCFullYear(),
+	new Date().getUTCMonth(),
+	new Date().getUTCDate(),
+);
+const pct = Math.max(0, Math.min(100, ((today - start) / (end - start)) * 100));
+const daysLeft = Math.max(0, Math.round((end - today) / DAY));
+const months = Math.round((end - start) / DAY / 30.44);
+const endLabel = new Date(end).toLocaleDateString("en-US", {
+	month: "long",
+	day: "numeric",
+	year: "numeric",
+	timeZone: "UTC",
+});
+const startLabel = new Date(start).toLocaleDateString("en-US", {
+	month: "long",
+	year: "numeric",
+	timeZone: "UTC",
+});
+
+const entries = await getCollection("logbook", (e) =>
+	e.id.startsWith(`${headline.logbook}/`) && (import.meta.env.PROD ? !e.data.draft : true),
+);
+entries.sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const latest = entries[0];
+
+const asChip = (c: { label: string; term?: string }) => ({
+	...c,
+	text: c.term ? glossary[c.term] : "",
+});
+const ready = headline.ready.map(asChip);
+---
+
+<section class="bg-primary">
+	<div class="px-8 2xl:max-w-7xl mx-auto pt-32 pb-8">
+		<div class="space-y-2">
+			<div
+				class="h-0.5 bg-secondary"
+				data-aos="fade-up"
+				data-aos-duration="1000"
+			>
+			</div>
+			<h3
+				class="text-secondary text-base font-medium"
+				data-aos="fade-up"
+				data-aos-duration="1500"
+			>
+				<span>The</span>
+				<span class="font-bold">headline</span>
+			</h3>
+		</div>
+
+		<article class="lead" data-aos="fade-up" data-aos-duration="1500">
+			<a
+				class="media"
+				href={`/logbook/${headline.logbook}`}
+			>
+				<Image
+					src={still}
+					width={1280}
+					alt="One racket hit, with the birdie found live in 94 of its 111 frames"
+				/>
+				<video
+					class="clip"
+					src="/videos/tracker.mp4"
+					muted
+					loop
+					playsinline
+					preload="none"
+					aria-hidden="true"></video>
+				<span class="play">hover to play</span>
+			</a>
+
+			<div class="copy">
+				<div class="inner">
+					<p class="kicker">{headline.kicker}</p>
+					<h2>{headline.title}</h2>
+					<p class="blurb">{headline.blurb}</p>
+
+					<div class="prog" data-start={headline.start} data-end={headline.end}>
+						<div class="row">
+							<span class="pct">{Math.floor(pct)}% of the way there</span>
+							<span class="left">{daysLeft} days to go</span>
+						</div>
+						<div class="bar"><i style={`width:${pct}%`}></i></div>
+						<p class="cap">
+							{months} months, {startLabel} to {endLabel}
+						</p>
+					</div>
+
+					<div class="spec">
+						<h4>Ready today</h4>
+						<ul class="chips" role="list">
+							{
+								ready.map((c) => (
+									<li>
+										{c.text ? (
+											<button
+												class="chip term"
+												data-label={c.label}
+												data-text={c.text}
+												aria-expanded="false"
+											>
+												{c.label}
+											</button>
+										) : (
+											<span class="chip">{c.label}</span>
+										)}
+									</li>
+								))
+							}
+						</ul>
+						<h4>Incoming...</h4>
+						<ul class="chips planned" role="list">
+							{
+								headline.incoming.map((c) => (
+									<li>
+										<span class="chip">{c.label}</span>
+									</li>
+								))
+							}
+						</ul>
+						<div class="gloss" role="status">
+							<b></b><span></span>
+						</div>
+					</div>
+
+					<p class="foot">
+						<a href={`/logbook/${headline.logbook}`}>Open the logbook &nbsp;↗</a>
+						{
+							latest && (
+								<span class="latest">
+									latest · {latest.data.date.toISOString().slice(0, 10)} ·{" "}
+									{latest.data.title}
+								</span>
+							)
+						}
+					</p>
+				</div>
+			</div>
+		</article>
+	</div>
+</section>
+
+<script>
+	// hover swaps the still for the clip, a tap does the same on touch screens
+	// the still stays visible until the clip is actually playing, so the box never goes blank
+	const media = document.querySelector<HTMLAnchorElement>(".lead .media");
+	const clipEl = media?.querySelector<HTMLVideoElement>("video.clip");
+	if (media && clipEl) {
+		clipEl.addEventListener("playing", () => media.classList.add("ready"));
+		media.addEventListener("mouseenter", () => {
+			clipEl.currentTime = 0;
+			clipEl.play().catch(() => {});
+		});
+		media.addEventListener("mouseleave", () => {
+			clipEl.pause();
+			media.classList.remove("ready");
+		});
+		media.addEventListener("click", (e) => {
+			if (matchMedia("(hover: none)").matches) {
+				e.preventDefault();
+				if (clipEl.paused) {
+					clipEl.play().catch(() => {});
+				} else {
+					clipEl.pause();
+					media.classList.remove("ready");
+				}
+			}
+		});
+	}
+
+	// the percentage is recalculated from the date on every visit
+	const prog = document.querySelector<HTMLElement>(".lead .prog");
+	if (prog) {
+		const DAY = 86400000;
+		const start = Date.parse(prog.dataset.start!);
+		const end = Date.parse(prog.dataset.end!);
+		const n = new Date();
+		const today = Date.UTC(n.getFullYear(), n.getMonth(), n.getDate());
+		const pct = Math.max(0, Math.min(100, ((today - start) / (end - start)) * 100));
+		prog.querySelector(".pct")!.textContent = `${Math.floor(pct)}% of the way there`;
+		prog.querySelector(".left")!.textContent =
+			`${Math.max(0, Math.round((end - today) / DAY))} days to go`;
+		(prog.querySelector(".bar i") as HTMLElement).style.width = `${pct}%`;
+	}
+
+	// tap-to-explain floats over the layout so nothing shifts
+	const spec = document.querySelector<HTMLElement>(".lead .spec");
+	const gloss = spec?.querySelector<HTMLElement>(".gloss");
+	if (spec && gloss) {
+		const terms = spec.querySelectorAll<HTMLButtonElement>(".term");
+		const close = () => {
+			gloss.classList.remove("open");
+			terms.forEach((t) => t.setAttribute("aria-expanded", "false"));
+		};
+		terms.forEach((t) =>
+			t.addEventListener("click", () => {
+				const was = t.getAttribute("aria-expanded") === "true";
+				close();
+				if (was) return;
+				t.setAttribute("aria-expanded", "true");
+				gloss.querySelector("b")!.textContent = t.dataset.label!;
+				gloss.querySelector("span")!.textContent = t.dataset.text!;
+				gloss.style.top =
+					t.getBoundingClientRect().bottom - spec.getBoundingClientRect().top + 6 + "px";
+				gloss.classList.add("open");
+			}),
+		);
+		document.addEventListener("keydown", (e) => e.key === "Escape" && close());
+		document.addEventListener("click", (e) => {
+			const el = e.target as HTMLElement;
+			if (!el.closest(".term") && !el.closest(".gloss")) close();
+		});
+	}
+</script>
+
+<style>
+	.lead {
+		--g: #00a86b;
+		--ink: #1e293b;
+		--paper: #fafafa;
+		--line: rgba(0, 168, 107, 0.35);
+		--mute: rgba(0, 168, 107, 0.7);
+		display: grid;
+		grid-template-columns: minmax(0, 640px) minmax(0, 1fr);
+		gap: 40px;
+		margin-top: 48px;
+		align-items: stretch;
+		color: var(--ink);
+	}
+	.media {
+		position: relative;
+		display: block;
+		aspect-ratio: 520 / 533;
+		border: 1px solid var(--line);
+		background: var(--paper);
+		overflow: hidden;
+	}
+	.media img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+	.media video.clip {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+		background: var(--paper);
+		opacity: 0;
+		transition: opacity 0.2s;
+	}
+	.media.ready video.clip {
+		opacity: 1;
+	}
+	.play {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		z-index: 2;
+		background: var(--paper);
+		border: 1px solid rgba(0, 168, 107, 0.5);
+		color: var(--g);
+		font: 11px ui-monospace, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		padding: 2px 8px;
+	}
+	.media:hover .play {
+		display: none;
+	}
+
+	/* the text fills exactly the height of the picture, first line at the top edge, last at the bottom edge */
+	.copy {
+		position: relative;
+		min-height: 0;
+	}
+	.inner {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+	}
+	.kicker {
+		font: 12px/1 ui-monospace, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.15em;
+		color: var(--mute);
+		margin: 0;
+	}
+	h2 {
+		font-style: italic;
+		font-weight: 700;
+		color: var(--g);
+		font-size: clamp(26px, 2.6vw, 34px);
+		line-height: 1.12;
+		margin: 0;
+	}
+	.blurb {
+		margin: 0;
+		line-height: 1.5;
+		font-size: 15px;
+	}
+	.prog .row {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+		font: 12px/1.2 ui-monospace, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--g);
+	}
+	.prog .bar {
+		height: 10px;
+		border: 1px solid var(--g);
+		margin-top: 6px;
+		background: var(--paper);
+	}
+	.prog .bar i {
+		display: block;
+		height: 100%;
+		background: var(--g);
+	}
+	.prog .cap {
+		margin: 6px 0 0;
+		font-size: 13px;
+		line-height: 1.3;
+		color: #475569;
+	}
+	.spec {
+		position: relative;
+		border-top: 2px solid var(--g);
+		padding-top: 12px;
+	}
+	.spec h4 {
+		margin: 0 0 8px;
+		font: 12px/1.2 ui-monospace, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+		color: var(--g);
+	}
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 0 0 14px;
+		padding: 0;
+		list-style: none;
+	}
+	.chips:last-of-type {
+		margin-bottom: 0;
+	}
+	.chip {
+		display: inline-block;
+		font: 12px ui-monospace, monospace;
+		letter-spacing: 0.04em;
+		border: 1px solid var(--line);
+		padding: 3px 9px;
+		background: var(--paper);
+		color: var(--ink);
+	}
+	button.chip {
+		cursor: pointer;
+	}
+	.term {
+		border-color: var(--g);
+		color: var(--g);
+		text-decoration: underline dotted;
+		text-underline-offset: 3px;
+	}
+	.term:hover,
+	.term[aria-expanded="true"] {
+		background: var(--g);
+		color: var(--paper);
+	}
+	.planned .chip {
+		border-style: dashed;
+		color: #64748b;
+		border-color: #94a3b8;
+	}
+	.gloss {
+		display: none;
+		position: absolute;
+		left: 0;
+		right: 0;
+		z-index: 6;
+		padding: 10px 12px;
+		border: 1px solid var(--g);
+		background: #f2fbf7;
+		font-size: 14px;
+		line-height: 1.5;
+		box-shadow: 0 6px 18px rgba(30, 41, 59, 0.12);
+	}
+	.gloss.open {
+		display: block;
+	}
+	.gloss b {
+		display: block;
+		margin-bottom: 4px;
+		font: 11px ui-monospace, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--g);
+	}
+	.foot {
+		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 24px;
+		align-items: baseline;
+		font-size: 15px;
+		line-height: 1.2;
+	}
+	.foot a {
+		color: var(--g);
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.foot a:hover {
+		text-decoration: underline;
+		text-underline-offset: 4px;
+	}
+	.latest {
+		font: 12px/1.2 ui-monospace, monospace;
+		color: var(--mute);
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	/* below this width the text needs more height than the picture has, so the two stack in one centred column */
+	@media (max-width: 1180px) {
+		.lead {
+			grid-template-columns: minmax(0, 1fr);
+			max-width: 640px;
+			margin-left: auto;
+			margin-right: auto;
+		}
+		.inner {
+			position: static;
+			gap: 20px;
+		}
+	}
+</style>

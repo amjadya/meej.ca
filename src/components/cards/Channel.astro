@@ -1,0 +1,130 @@
+---
+// one beacon channel, the same drawing as the aerodesign build page, with optional path and highlight
+interface Props {
+	tone?: string;
+	current?: string | null;
+	reversed?: boolean;
+	flow?: string;
+	chev?: [number, number, number][];
+	hl?: "q1" | "rs" | "q2" | "rg";
+	note?: string;
+	label: string;
+}
+
+const {
+	tone = "tone in",
+	current = "about 98 mA",
+	reversed = false,
+	flow,
+	chev = [],
+	hl,
+	note,
+	label,
+} = Astro.props;
+
+const boxes = {
+	q1: { x: 403, y: 360, w: 32, h: 40 },
+	rs: { x: 419, y: 437, w: 22, h: 66 },
+	q2: { x: 322, y: 410, w: 52, h: 60 },
+	rg: { x: 146, y: 370, w: 68, h: 20 },
+};
+const box = hl ? boxes[hl] : null;
+---
+
+<svg viewBox="45 0 565 560" role="img" aria-label={label}>
+	{box && <rect class="hl" x={box.x} y={box.y} width={box.w} height={box.h} rx="6" />}
+	{flow && <path class="glow" d={flow} />}
+
+	<text class="t b" x="430" y="18" text-anchor="middle">
+		{reversed ? "0 V (supply −)" : "+24 V rail"}
+	</text>
+	<path class="w" d="M412 26H448M430 26V104"></path>
+	{note && <text class="s b" x="418" y="60" text-anchor="end">{note}</text>}
+	<rect class="dash" x="372" y="92" width="200" height="204" rx="8"></rect>
+	<text class="s" x="564" y="276" text-anchor="end">hoop around each</text>
+	<text class="s" x="564" y="289" text-anchor="end">of the landing gears</text>
+	<path class="w" d="M430 144V154M430 272V350"></path>
+	<use href="#led-d" x="430" y="104"></use>
+	<use href="#led-d" x="430" y="154"></use>
+	<path class="dots" d="M430 198V228"></path>
+	<text class="s" x="444" y="217">LED3 to LED11</text>
+	<use href="#led-d" x="430" y="232"></use>
+	<text class="t" x="460" y="129">LED1</text>
+	<text class="t" x="460" y="179">LED2</text>
+	<text class="t" x="460" y="257">LED12</text>
+	<text class="s" x="418" y="112" text-anchor="end">A</text>
+	<text class="s" x="418" y="142" text-anchor="end">K</text>
+
+	{
+		current && (
+			<>
+				<path class="thin" d="M448 312V333" />
+				<polygon class="mf" points="448,340 443.5,331 452.5,331" />
+				<text class="s" x="457" y="331">
+					{current}
+				</text>
+			</>
+		)
+	}
+
+	<use href="#nmos" x="402" y="380"></use>
+	<text class:list={["t b", hl === "q1" && "gt"]} x="448" y="378">Q1</text>
+	<text class="s" x="448" y="393">IRFZ44</text>
+	<text class="s" x="397" y="374" text-anchor="end">G</text>
+	<text class="s" x="438" y="357">D</text>
+	<text class="s" x="438" y="412">S</text>
+
+	<path class="w" d="M430 410V440"></path>
+	<use href="#res-v" x="430" y="440"></use>
+	<text class="s" x="440" y="436">sense node</text>
+	<text class:list={["t b", hl === "rs" && "gt"]} x="446" y="468">R<tspan class="sub" dy="4">S</tspan></text>
+	<text class="s" x="446" y="485">6.8 Ω</text>
+	<text class="s" x="446" y="500">0.67 V across it while lit</text>
+
+	<use href="#term" x="110" y="380"></use>
+	<text class="t b" x="110" y="362" text-anchor="middle">{tone}</text>
+	<path class="w" d="M113.6 380H150M210 380H402"></path>
+	<use href="#res-h" x="150" y="380"></use>
+	<text class:list={["t b", hl === "rg" && "gt"]} x="180" y="364" text-anchor="middle">R<tspan class="sub" dy="4">G</tspan></text>
+	<text class="s" x="180" y="402" text-anchor="middle">1 kΩ</text>
+	<path class="w" d="M260 380V420"></path>
+	<use href="#res-v" x="260" y="420"></use>
+	<text class="t b" x="248" y="446" text-anchor="end">R<tspan class="sub" dy="4">OFF</tspan></text>
+	<text class="s" x="248" y="463" text-anchor="end">100 kΩ</text>
+
+	<path class="w" d="M340 380V410M368 440H430M340 470V520"></path>
+	<use href="#npn" transform="translate(368 440) scale(-1 1)"></use>
+	<text class:list={["t b", hl === "q2" && "gt"]} x="298" y="436" text-anchor="middle">Q2</text>
+	<text class="s" x="298" y="451" text-anchor="middle">2N3904</text>
+	<text class="s" x="346" y="404">C</text>
+	<text class="s" x="378" y="434">B</text>
+	<text class="s" x="346" y="486">E</text>
+
+	<path class="w" d="M430 500V520H260V480"></path>
+	{
+		reversed ? (
+			<>
+				<path class="w" d="M300 520V536" />
+				<use href="#term" x="300" y="540" />
+				<text class="s b" x="312" y="552">
+					GND rail, now on supply + (24 V)
+				</text>
+			</>
+		) : (
+			<>
+				<use href="#gnd" x="300" y="520" />
+				<text class="s" x="316" y="544">
+					GND rail
+				</text>
+			</>
+		)
+	}
+	<use href="#dot" x="260" y="380"></use>
+	<use href="#dot" x="340" y="380"></use>
+	<use href="#dot" x="430" y="440"></use>
+	<use href="#dot" x="300" y="520"></use>
+	<use href="#dot" x="340" y="520"></use>
+
+	{flow && <path class="march" d={flow} />}
+	{chev.map(([x, y, a]) => <use href="#chev" transform={`translate(${x} ${y}) rotate(${a})`} />)}
+</svg>

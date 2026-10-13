@@ -4,6 +4,10 @@ import BaseLayout from "../../../layouts/BaseLayout.astro";
 import LogbookHeader from "../../../components/LogbookHeader.astro";
 import HomeButton from "../../../components/HomeButton.astro";
 import { logbooks, type Logbook } from "../../../data/logbooks";
+import { gapNotes, gapKinds, type GapKind } from "../../../data/logbookGaps";
+import EntryThumbs from "../../../components/EntryThumbs.astro";
+import { entryImages } from "../../../lib/entryImages";
+import { inlineCode } from "../../../lib/inlineCode";
 
 export async function getStaticPaths() {
 	return logbooks.map((logbook) => ({
@@ -37,10 +41,36 @@ const fmtDate = (d: Date) =>
 const fmtMonth = (d: Date) =>
 	d.toLocaleDateString("en-US", { year: "numeric", month: "long", timeZone: "UTC" });
 
+const DAY = 86400000;
+const GAP_DAYS = 14;
+const fmtShort = (t: number) =>
+	new Date(t).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		timeZone: "UTC",
+	});
+
+// a gap hangs under the entry that ended it, a shipped marker above the last entry
+type Gap = { from: number; to: number; days: number; kind?: GapKind; note?: string };
+const gapEnding = new Map<string, Gap>();
+const oldestFirst = [...entries].reverse();
+for (let i = 1; i < oldestFirst.length; i++) {
+	const from = oldestFirst[i - 1].data.date.getTime();
+	const to = oldestFirst[i].data.date.getTime();
+	const days = Math.round((to - from) / DAY);
+	if (days >= GAP_DAYS) {
+		const note = gapNotes.find(
+			(n) => n.project === project && n.from === new Date(from).toISOString().slice(0, 10),
+		);
+		gapEnding.set(oldestFirst[i].id, { from, to, days, kind: note?.kind, note: note?.note });
+	}
+}
+const lastEntryId = oldestFirst.length ? oldestFirst[oldestFirst.length - 1].id : null;
+
 type Entry = (typeof entries)[number];
 type TimelineItem =
 	| { kind: "month"; label: string }
-	| { kind: "entry"; entry: Entry };
+	| { kind: "entry"; entry: Entry; gap?: Gap; shipped: boolean };
 
 const timeline: TimelineItem[] = [];
 let lastLabel: string | null = null;
@@ -50,7 +80,12 @@ for (const entry of entries) {
 		timeline.push({ kind: "month", label });
 		lastLabel = label;
 	}
-	timeline.push({ kind: "entry", entry });
+	timeline.push({
+		kind: "entry",
+		entry,
+		gap: gapEnding.get(entry.id),
+		shipped: logbook.status === "shipped" && entry.id === lastEntryId,
+	});
 }
 
 const slugFromId = (id: string) => id.split("/").slice(1).join("/");
@@ -109,7 +144,16 @@ const slugFromId = (id: string) => id.split("/").slice(1).join("/");
 									</span>
 								</li>
 							) : (
-								<li class="relative pl-12 mb-12 last:mb-0">
+								<>
+								{item.shipped && (
+									<li class="relative pl-12 mb-8">
+										<div class="marker shipped">
+											<span class="t">Shipped</span>
+											<span class="range">No more entries for now!</span>
+										</div>
+									</li>
+								)}
+								<li class="entry-item relative pl-12 mb-12 last:mb-0">
 									<span
 										class="absolute left-3 top-2 -translate-x-1/2 w-3 h-3 rounded-full bg-secondary ring-4 ring-primary"
 										aria-hidden="true"
@@ -135,9 +179,11 @@ const slugFromId = (id: string) => id.split("/").slice(1).join("/");
 										<h2 class="text-2xl sm:text-3xl font-bold italic text-secondary mt-2 group-hover:underline underline-offset-4">
 											{item.entry.data.title}
 										</h2>
-										<p class="text-base text-slate-800 mt-3 leading-relaxed">
-											{item.entry.data.summary}
-										</p>
+										<p
+											class="text-base text-slate-800 mt-3 leading-relaxed"
+											set:html={inlineCode(item.entry.data.summary)}
+										/>
+										<EntryThumbs images={entryImages(item.entry.body)} />
 										{item.entry.data.tags &&
 											item.entry.data.tags.length > 0 && (
 												<ul class="flex flex-wrap gap-2 mt-4" role="list">
@@ -150,6 +196,31 @@ const slugFromId = (id: string) => id.split("/").slice(1).join("/");
 											)}
 									</a>
 								</li>
+								{item.gap && (
+									<li class="relative pl-12 mb-12">
+										<div class={`marker gap ${item.gap.kind ?? "plain"}`}>
+											{item.gap.kind ? (
+												<>
+													<div class="gl">
+														<b>{gapKinds[item.gap.kind].label}</b>
+													</div>
+													<p class="quote">
+														{item.gap.note ?? gapKinds[item.gap.kind].note}
+													</p>
+												</>
+											) : (
+												<div class="gl">
+													<span>{item.gap.days} days since the last entry for this project</span>
+												</div>
+											)}
+											<div class="range">
+												{fmtShort(item.gap.from)} to {fmtShort(item.gap.to)},{" "}
+												{new Date(item.gap.to).getUTCFullYear()}
+											</div>
+										</div>
+									</li>
+								)}
+								</>
 							)
 						)}
 					</ol>
@@ -175,3 +246,86 @@ const slugFromId = (id: string) => id.split("/").slice(1).join("/");
 		</div>
 	</footer>
 </BaseLayout>
+
+<style>
+	.marker {
+		font-family: inherit;
+		color: #1e293b;
+	}
+	.marker .gl {
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 12px;
+	}
+	.marker .range {
+		margin-top: 4px;
+		color: rgba(0, 168, 107, 0.7);
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 12px;
+		letter-spacing: 0.04em;
+	}
+	.marker .quote {
+		font-style: italic;
+		margin: 6px 0 0;
+	}
+	.marker.gap {
+		border: 1px dashed rgba(0, 168, 107, 0.7);
+		padding: 10px 12px;
+		background: repeating-linear-gradient(
+			135deg,
+			transparent 0 7px,
+			rgba(30, 41, 59, 0.04) 7px 8px
+		);
+	}
+	.marker.gap.plain {
+		padding: 6px 12px;
+		background: none;
+	}
+	.marker.gap.plain .gl {
+		text-transform: none;
+		letter-spacing: 0.02em;
+		font-size: 13px;
+	}
+	.marker.gap.lost {
+		border: 2px dashed #1e293b;
+		padding: 14px;
+	}
+	.marker.gap.lost .gl b {
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		font-size: 13px;
+	}
+	.marker.gap.paused {
+		border: 3px double #8a6d1a;
+		padding: 12px 14px;
+		background: linear-gradient(
+			180deg,
+			rgba(138, 109, 26, 0.1),
+			rgba(138, 109, 26, 0) 70%
+		);
+	}
+	.marker.gap.paused .gl b {
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		font-size: 13px;
+		color: #8a6d1a;
+	}
+	.marker.shipped {
+		border: 2px solid #1e293b;
+		padding: 8px 12px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 12px;
+		align-items: center;
+	}
+	.marker.shipped .t {
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 12px;
+	}
+	.marker.shipped .range {
+		margin: 0;
+	}
+</style>

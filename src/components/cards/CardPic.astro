@@ -1,0 +1,1004 @@
+---
+// the picture on each card, picked by the card's pic key
+import Channel from "./Channel.astro";
+
+interface Props {
+	pic: string;
+}
+const { pic } = Astro.props;
+
+const mainFlow = "M430 30V520H306";
+const mainChev: [number, number, number][] = [
+	[430, 62, 90],
+	[430, 326, 90],
+	[430, 425, 90],
+	[372, 520, 180],
+];
+const gatePath = "M114 170H213L230 200V240";
+const mosLabel: Record<string, string> = {
+	"mos-lowside":
+		"A 12 V supply, a load, and an N-channel MOSFET below the load with its source to GND. The gate sits at 5 V and the threshold is 2 V. The highlighted path runs through the load, into the drain and out the source.",
+	"mos-gate-path":
+		"The same low-side MOSFET circuit with the gate at 5 V. The highlighted path runs from the gate pin into the gate and out the source to GND.",
+	"mos-compare":
+		"Two copies of the same low-side MOSFET circuit, each with a 2 V threshold. One gate sits at 2.3 V, the other at 10 V.",
+};
+// a 3 by 3 patch of the silicon lattice, every bond drawn with its two shared electrons
+const LX = [70, 160, 250];
+const LY = [60, 150, 240];
+const bonds: { x1: number; y1: number; x2: number; y2: number }[] = [];
+for (const y of LY) {
+	bonds.push({ x1: 20, y1: y, x2: 50, y2: y }, { x1: 270, y1: y, x2: 300, y2: y });
+	bonds.push({ x1: 90, y1: y, x2: 140, y2: y }, { x1: 180, y1: y, x2: 230, y2: y });
+}
+for (const x of LX) {
+	bonds.push({ x1: x, y1: 10, x2: x, y2: 40 }, { x1: x, y1: 260, x2: x, y2: 290 });
+	bonds.push({ x1: x, y1: 80, x2: x, y2: 130 }, { x1: x, y1: 170, x2: x, y2: 220 });
+}
+const bondDots = (b: (typeof bonds)[number]) => {
+	const mx = (b.x1 + b.x2) / 2;
+	const my = (b.y1 + b.y2) / 2;
+	return b.y1 === b.y2
+		? [
+				[mx - 7, my],
+				[mx + 7, my],
+			]
+		: [
+				[mx, my - 7],
+				[mx, my + 7],
+			];
+};
+// the electron in the boron card's short bond that is missing
+const isMissing = (x: number, y: number) => x === 198 && y === 150;
+
+const holesP = [
+	[60, 70], [98, 80], [136, 68], [174, 78], [204, 70],
+	[78, 108], [118, 112], [156, 102], [196, 112],
+	[60, 146], [100, 142], [140, 150], [178, 144], [206, 150],
+];
+
+const q2Flow = "M114 380H340V520H306";
+const q2Chev: [number, number, number][] = [
+	[136, 380, 0],
+	[300, 380, 0],
+	[340, 496, 90],
+];
+---
+
+{
+	pic === "kvl-two" && (
+		<svg viewBox="0 0 380 280" role="img" aria-label="A 24 V battery with two resistors in series. A voltmeter across the top resistor reads 15 V, and a second voltmeter across the bottom resistor reads an unknown value.">
+			<path class="w" d="M80 40V110M80 150V250H220V210M220 150V120M220 60V40H80" />
+			<use href="#bat-v" x="80" y="110" />
+			<text class="t b" x="56" y="135" text-anchor="end">24 V</text>
+			<text class="s" x="98" y="122">+</text>
+			<use href="#res-v" x="220" y="60" />
+			<use href="#res-v" x="220" y="150" />
+			<path class="w" d="M220 50H310V77M310 107V164M310 196V230H220M310 135H220" />
+			<circle class="meter" cx="310" cy="92" r="15" />
+			<text class="t b" x="310" y="96.5" text-anchor="middle">V</text>
+			<circle class="meter" cx="310" cy="180" r="15" />
+			<text class="t b" x="310" y="184.5" text-anchor="middle">V</text>
+			<text class="t b" x="334" y="97">15 V</text>
+			<text class="t b gt" x="334" y="185">?</text>
+			<use href="#dot" x="220" y="50" />
+			<use href="#dot" x="220" y="135" />
+			<use href="#dot" x="220" y="230" />
+			<use href="#dot" x="310" y="135" />
+		</svg>
+	)
+}
+
+{
+	(pic === "ohm" || pic === "ohm-power") && (
+		<svg viewBox="0 0 320 170" role="img" aria-label={pic === "ohm" ? "A 10 ohm resistor with a voltmeter across it reading 2 V." : "A 10 ohm resistor with 2 V across it and 200 mA through it."}>
+			<path class="w" d="M43.6 110H130M190 110H276.4" />
+			<use href="#res-h" x="130" y="110" />
+			<use href="#term" x="40" y="110" />
+			<use href="#term" x="280" y="110" />
+			<path class="w" d="M90 110V45H145M175 45H230V110" />
+			<circle class="meter" cx="160" cy="45" r="15" />
+			<text class="t b" x="160" y="49.5" text-anchor="middle">V</text>
+			<text class="t b" x="160" y="20" text-anchor="middle">2 V</text>
+			<use href="#dot" x="90" y="110" />
+			<use href="#dot" x="230" y="110" />
+			<text class="t b" x="160" y="140" text-anchor="middle">10 Ω</text>
+			<path class="thin" d="M232 132H258" />
+			<polygon class="mf" points="266,132 257,127.5 257,136.5" />
+			<text class:list={["t b", pic === "ohm" && "gt"]} x="249" y="156" text-anchor="middle">
+				{pic === "ohm" ? "?" : "200 mA"}
+			</text>
+		</svg>
+	)
+}
+
+{
+	pic === "series-amm" && (
+		<svg viewBox="0 0 420 290" role="img" aria-label="A battery and three resistors in series. An ammeter between the first and second resistors reads 50 mA. A second ammeter after the third resistor reads an unknown value.">
+			<path class="w" d="M50 60V120M50 160V260H340V205M340 175V150M340 90V60H280M220 60H200M170 60H150M90 60H50" />
+			<use href="#bat-v" x="50" y="120" />
+			<text class="s" x="68" y="132">+</text>
+			<use href="#res-h" x="90" y="60" />
+			<circle class="meter" cx="185" cy="60" r="15" />
+			<text class="t b" x="185" y="64.5" text-anchor="middle">A</text>
+			<text class="t b" x="185" y="32" text-anchor="middle">50 mA</text>
+			<use href="#res-h" x="220" y="60" />
+			<use href="#res-v" x="340" y="90" />
+			<circle class="meter" cx="340" cy="190" r="15" />
+			<text class="t b" x="340" y="194.5" text-anchor="middle">A</text>
+			<text class="t b gt" x="364" y="195">?</text>
+		</svg>
+	)
+}
+
+{
+	pic === "gnd-node" && (
+		<svg viewBox="0 0 380 290" role="img" aria-label="A 24 V battery with two resistors in series: 15 V across the top one and 9 V across the bottom one. The battery's negative end is GND, 0 V. A dot marks the wire between the two resistors.">
+			<path class="w" d="M80 40V110M80 150V250H220V210M220 150V120M220 60V40H80" />
+			<use href="#bat-v" x="80" y="110" />
+			<text class="t b" x="56" y="135" text-anchor="end">24 V</text>
+			<text class="s" x="98" y="122">+</text>
+			<use href="#res-v" x="220" y="60" />
+			<use href="#res-v" x="220" y="150" />
+			<path class="thin" d="M236 62H244V118H236M236 152H244V208H236" />
+			<text class="s b" x="250" y="72">+</text>
+			<text class="s b" x="250" y="118">−</text>
+			<text class="s b" x="250" y="162">+</text>
+			<text class="s b" x="250" y="208">−</text>
+			<text class="t b" x="264" y="95">15 V across</text>
+			<text class="t b" x="264" y="185">9 V across</text>
+			<use href="#gnd" x="150" y="250" />
+			<text class="s" x="166" y="276">GND (0 V)</text>
+			<circle class="bigdot" cx="220" cy="135" r="6" />
+			<text class="t b gt" x="204" y="140" text-anchor="end">?</text>
+		</svg>
+	)
+}
+
+{
+	pic === "diode-against" && (
+		<svg viewBox="0 0 380 290" role="img" aria-label="A battery, a resistor and a diode in one loop. The diode's triangle points against the direction of the highlighted current path.">
+			<path class="glow" d="M70 120V50H320V250H70V160" />
+			<path class="w" d="M70 50V120M70 160V250H320V170M320 130V50H230M170 50H70" />
+			<use href="#bat-v" x="70" y="120" />
+			<text class="s" x="88" y="132">+</text>
+			<use href="#res-h" x="170" y="50" />
+			<use href="#diode-d" transform="translate(320 170) scale(1 -1)" />
+			<path class="march" d="M70 120V50H320V250H70V160" />
+			<use href="#chev" transform="translate(120 50)" />
+			<use href="#chev" transform="translate(320 92) rotate(90)" />
+			<use href="#chev" transform="translate(320 214) rotate(90)" />
+			<use href="#chev" transform="translate(200 250) rotate(180)" />
+		</svg>
+	)
+}
+
+{
+	(pic === "led-basic" || pic === "led-sag") && (
+		<svg viewBox="0 0 440 290" role="img" aria-label={pic === "led-basic" ? "A 5 V battery, a 150 ohm resistor and an LED pointing the right way. The LED drops 2 V." : "The same LED circuit with the battery sagged from 5 V to 4.4 V."}>
+			<path class="w" d="M70 50V120M70 160V250H320V170M320 130V50H230M170 50H70" />
+			<use href="#bat-v" x="70" y="120" />
+			<text class="s" x="88" y="132">+</text>
+			<text class="t b" x="48" y="145" text-anchor="end">
+				{pic === "led-basic" ? "5 V" : "4.4 V"}
+			</text>
+			{pic === "led-sag" && (
+				<text class="s" x="48" y="161" text-anchor="end">
+					was 5 V
+				</text>
+			)}
+			<use href="#res-h" x="170" y="50" />
+			<text class="t b" x="200" y="30" text-anchor="middle">150 Ω</text>
+			<use href="#led-d" x="320" y="130" />
+			<text class="t b" x="350" y="155">drops 2 V</text>
+			<path class="thin" d="M236 268H184" />
+			<polygon class="mf" points="176,268 185,263.5 185,272.5" />
+			<text class="t b gt" x="166" y="273" text-anchor="end">?</text>
+		</svg>
+	)
+}
+
+{
+	pic === "led-reversed" && (
+		<svg viewBox="0 0 440 290" role="img" aria-label="The same LED circuit with the 5 V battery flipped around, so it pushes the other way. The LED is rated for 5 V backwards.">
+			<path class="w" d="M70 50V120M70 160V250H320V170M320 130V50H230M170 50H70" />
+			<use href="#bat-v" transform="translate(70 160) scale(1 -1)" />
+			<text class="s" x="88" y="158">+</text>
+			<text class="t b" x="48" y="145" text-anchor="end">5 V</text>
+			<text class="s" x="48" y="161" text-anchor="end">flipped</text>
+			<use href="#res-h" x="170" y="50" />
+			<text class="t b" x="200" y="30" text-anchor="middle">150 Ω</text>
+			<use href="#led-d" x="320" y="130" />
+			<text class="s b" x="350" y="146">rated 5 V</text>
+			<text class="s b" x="350" y="161">backwards</text>
+		</svg>
+	)
+}
+
+{
+	pic === "led-string" && (
+		<svg viewBox="0 0 370 170" role="img" aria-label="Twelve LEDs in series, each dropping 1.6 V.">
+			<use href="#term" x="20" y="70" />
+			<path class="w" d="M23.6 70H40M80 70H100M140 70H160M200 70H210M250 70H260M300 70H336.4" />
+			<use href="#led-r" x="40" y="70" />
+			<use href="#led-r" x="100" y="70" />
+			<use href="#led-r" x="160" y="70" />
+			<path class="dots" d="M214 70H246" />
+			<use href="#led-r" x="260" y="70" />
+			<use href="#term" x="340" y="70" />
+			<text class="s" x="230" y="44" text-anchor="middle">LED4 to 11</text>
+			<text class="t b" x="60" y="100" text-anchor="middle">1.6 V</text>
+			<text class="t b" x="120" y="100" text-anchor="middle">1.6 V</text>
+			<text class="t b" x="180" y="100" text-anchor="middle">1.6 V</text>
+			<text class="t b" x="280" y="100" text-anchor="middle">1.6 V</text>
+			<path class="thin" d="M24 118V126H336V118" />
+			<text class="t b gt" x="180" y="150" text-anchor="middle">whole string: ?</text>
+		</svg>
+	)
+}
+
+{
+	(pic === "mos-lowside" || pic === "mos-gate-path" || pic === "mos-compare") && (
+		<svg viewBox={pic === "mos-compare" ? "60 0 600 270" : "60 0 300 270"} role="img" aria-label={mosLabel[pic]}>
+			{(pic === "mos-compare" ? ["2.3 V", "10 V"] : ["5 V"]).map((g, i) => (
+				<g transform={`translate(${i * 300} 0)`}>
+					{pic === "mos-lowside" && <path class="glow" d="M230 30V240" />}
+					{pic === "mos-gate-path" && <path class="glow" d={gatePath} />}
+					<text class="t b" x="230" y="20" text-anchor="middle">12 V</text>
+					<path class="w" d="M212 28H248M230 28V60M230 120V140M230 200V240M113.6 170H202" />
+					<use href="#res-v" x="230" y="60" />
+					<text class="s" x="244" y="94">load</text>
+					<use href="#nmos" x="202" y="170" />
+					<use href="#gnd" x="230" y="240" />
+					<use href="#term" x="110" y="170" />
+					<text class="t b" x="110" y="150" text-anchor="middle">gate {g}</text>
+					<text class="s" x="196" y="163" text-anchor="end">G</text>
+					<text class="s" x="240" y="150">D</text>
+					<text class="s" x="240" y="198">S</text>
+					<text class="s b" x="256" y="174">threshold 2 V</text>
+					{pic === "mos-lowside" && (
+						<>
+							<path class="march" d="M230 30V240" />
+							<use href="#chev" transform="translate(230 44) rotate(90)" />
+							<use href="#chev" transform="translate(230 132) rotate(90)" />
+							<use href="#chev" transform="translate(230 224) rotate(90)" />
+						</>
+					)}
+					{pic === "mos-gate-path" && (
+						<>
+							<path class="march" d={gatePath} />
+							<use href="#chev" transform="translate(150 170)" />
+							<use href="#chev" transform="translate(230 224) rotate(90)" />
+						</>
+					)}
+				</g>
+			))}
+		</svg>
+	)
+}
+
+{
+	pic === "mos-vgs" && (
+		<svg viewBox="0 0 320 220" role="img" aria-label="An N-channel MOSFET on its own. The gate is at 5 V, the source is at 4 V, and the threshold is 2 V.">
+			<path class="w" d="M73.6 110H130M158 80V43.6M158 140V176.4" />
+			<use href="#nmos" x="130" y="110" />
+			<use href="#term" x="70" y="110" />
+			<use href="#term" x="158" y="40" />
+			<use href="#term" x="158" y="180" />
+			<text class="t b" x="70" y="90" text-anchor="middle">gate 5 V</text>
+			<text class="t b" x="172" y="44">drain</text>
+			<text class="t b" x="172" y="184">source 4 V</text>
+			<text class="s b" x="184" y="114">threshold 2 V</text>
+		</svg>
+	)
+}
+
+{
+	(pic === "npn-base" || pic === "npn-gain") && (
+		<svg viewBox="0 0 360 280" role="img" aria-label={pic === "npn-base" ? "An NPN transistor. A 5 V microcontroller pin feeds its base through a resistor, the emitter goes to GND, and the collector goes up through a load to 12 V. The highlighted path runs from the pin into the base and out the emitter to GND." : "The same NPN circuit with a 100 ohm load, a meter reading 100 microamps on the base wire, and the transistor labelled gain 100. The collector current is unknown."}>
+			{pic === "npn-base" && <path class="glow" d="M44 170H213L228 185V240" />}
+			<text class="t b" x="228" y="20" text-anchor="middle">12 V</text>
+			<path class="w" d="M210 28H246M228 28V60M228 120V140M228 200V240M170 170H200" />
+			<use href="#res-v" x="228" y="60" />
+			<text class="s" x="242" y="94">{pic === "npn-base" ? "load" : "100 Ω load"}</text>
+			<use href="#npn" x="200" y="170" />
+			<use href="#gnd" x="228" y="240" />
+			<text class="s" x="238" y="148">C</text>
+			<text class="s" x="238" y="200">E</text>
+			<use href="#term" x="40" y="170" />
+			<text class="t b" x="40" y="150" text-anchor="middle">pin 5 V</text>
+			<use href="#res-h" x="110" y="170" />
+			{pic === "npn-base" ? (
+				<path class="w" d="M43.6 170H110" />
+			) : (
+				<>
+					<path class="w" d="M43.6 170H70M100 170H110" />
+					<circle class="meter" cx="85" cy="170" r="15" />
+					<text class="t b" x="85" y="174.5" text-anchor="middle">A</text>
+					<text class="t b" x="85" y="206" text-anchor="middle">100 µA</text>
+					<text class="s b" x="252" y="174">gain 100</text>
+					<path class="thin" d="M206 62V100" />
+					<polygon class="mf" points="206,108 201.5,99 210.5,99" />
+					<text class="t b gt" x="194" y="90" text-anchor="end">?</text>
+				</>
+			)}
+			{pic === "npn-base" && (
+				<>
+					<path class="march" d="M44 170H213L228 185V240" />
+					<use href="#chev" transform="translate(84 170)" />
+					<use href="#chev" transform="translate(228 224) rotate(90)" />
+				</>
+			)}
+		</svg>
+	)
+}
+
+{
+	pic === "npn-low" && (
+		<svg viewBox="0 0 320 220" role="img" aria-label="An NPN transistor with its base 0.3 V above its emitter. The highlighted path runs from collector to emitter.">
+			<path class="glow" d="M158 44V176" />
+			<path class="w" d="M73.6 110H130M158 80V43.6M158 140V176.4" />
+			<use href="#npn" x="130" y="110" />
+			<use href="#term" x="70" y="110" />
+			<use href="#term" x="158" y="40" />
+			<use href="#term" x="158" y="180" />
+			<text class="t b" x="70" y="90" text-anchor="middle">base 0.3 V</text>
+			<text class="t b" x="172" y="44">collector</text>
+			<text class="t b" x="172" y="184">emitter 0 V</text>
+			<path class="march" d="M158 44V176" />
+			<use href="#chev" transform="translate(158 62) rotate(90)" />
+			<use href="#chev" transform="translate(158 162) rotate(90)" />
+		</svg>
+	)
+}
+
+{
+	(pic === "si-pure" || pic === "si-n" || pic === "si-p") && (
+		<svg viewBox="0 0 510 300" role="img" aria-label={pic === "si-pure" ? "A patch of the silicon lattice. Each silicon atom bonds to four neighbours, and each bond holds two shared electrons." : pic === "si-n" ? "The same lattice with a phosphorus atom in the middle. Its four bonds are full, and one spare electron sits beside it." : "The same lattice with a boron atom in the middle. One of its bonds holds only one electron, leaving a hole."}>
+			{bonds.map((b) => (
+				<line class="bond" x1={b.x1} y1={b.y1} x2={b.x2} y2={b.y2} />
+			))}
+			{bonds.flatMap((b) =>
+				bondDots(b).map(([x, y]) =>
+					pic === "si-p" && isMissing(x, y) ? (
+						<circle class="hole" cx={x} cy={y} r="4.5" style="stroke:#00a86b" />
+					) : (
+						<circle class="el" cx={x} cy={y} r="3" />
+					),
+				),
+			)}
+			{LY.flatMap((y) =>
+				LX.map((x) => {
+					const mid = x === 160 && y === 150 && pic !== "si-pure";
+					return (
+						<>
+							<circle class:list={["atom", mid && "odd"]} cx={x} cy={y} r="20" />
+							<text class:list={["t b", mid && "gt"]} x={x} y={y + 4.5} text-anchor="middle">
+								{mid ? (pic === "si-n" ? "P" : "B") : "Si"}
+							</text>
+						</>
+					);
+				}),
+			)}
+			{pic === "si-n" && <circle class="bigdot" cx="184" cy="124" r="4" />}
+			<rect class="legend" x="318" y="34" width="184" height={pic === "si-pure" ? 100 : 164} />
+			<circle class="el" cx="334" cy="60" r="3" />
+			<text class="s" x="346" y="64">shared electron</text>
+			<text class="s" x="330" y="92">each bond has 2 electrons</text>
+			<text class="s" x="330" y="116">silicon has 4 outer electrons</text>
+			{pic === "si-n" && (
+				<>
+					<text class="s" x="330" y="140">phosphorus has 5</text>
+					<circle class="bigdot" cx="334" cy="172" r="4" />
+					<text class="t b gt" x="344" y="176">spare electron</text>
+				</>
+			)}
+			{pic === "si-p" && (
+				<>
+					<text class="s" x="330" y="140">boron has 3</text>
+					<circle class="hole" cx="334" cy="172" r="4.5" style="stroke:#00a86b" />
+					<text class="t b gt" x="344" y="176">hole (missing electron)</text>
+				</>
+			)}
+		</svg>
+	)
+}
+
+{
+	pic === "pn-join" && (
+		<svg viewBox="0 0 440 230" role="img" aria-label="A block of P-type silicon full of holes, joined on its right to a block of N-type silicon full of free electrons.">
+			<rect class="pt" x="40" y="50" width="180" height="120" />
+			<rect class="nt" x="220" y="50" width="180" height="120" />
+			{holesP.map(([x, y]) => <circle class="hole" cx={x} cy={y} r="4" />)}
+			{holesP.map(([x, y]) => <circle class="el" cx={440 - x} cy={y} r="3.5" />)}
+			<text class="t b" x="130" y="36" text-anchor="middle">P-type</text>
+			<text class="t b" x="310" y="36" text-anchor="middle">N-type</text>
+			<text class="t b gt" x="220" y="36" text-anchor="middle">?</text>
+			<circle class="hole" cx="48" cy="200" r="4" />
+			<text class="s" x="58" y="204">hole</text>
+			<circle class="el" cx="110" cy="200" r="3.5" />
+			<text class="s" x="120" y="204">free electron</text>
+		</svg>
+	)
+}
+
+{
+	pic === "pn-bias" && (
+		<svg viewBox="0 0 470 240" role="img" aria-label="Two copies of a P and N block joined, each wired to a battery. In A the battery's + end connects to the P side. In B it connects to the N side.">
+			{["A", "B"].map((tag, i) => (
+				<g transform={`translate(${i * 250} 0)`}>
+					<rect class="pt" x="40" y="50" width="70" height="50" />
+					<rect class="nt" x="110" y="50" width="70" height="50" />
+					<text class="t b" x="75" y="80" text-anchor="middle">P</text>
+					<text class="t b" x="145" y="80" text-anchor="middle">N</text>
+					<path class="w" d="M40 75H20V190H80M120 190H200V75H180" />
+					<use href="#bat-v" transform={i === 0 ? "translate(80 190) rotate(-90)" : "translate(120 190) rotate(90)"} />
+					<text class="s" x={i === 0 ? 92 : 104} y="174" text-anchor="middle">+</text>
+					<text class="t b" x="110" y="228" text-anchor="middle">{tag}</text>
+				</g>
+			))}
+		</svg>
+	)
+}
+
+{
+	pic === "diode-sym" && (
+		<svg viewBox="0 0 440 320" role="img" aria-label="Three things lined up. A P block joined to an N block, with P on the left. A diode symbol, triangle on the left pointing right into a bar. A real LED seen from the side, with a long leg on the left, a short leg on the right, and a flat edge on the right of its rim.">
+			<text class="s" x="40" y="55">silicon</text>
+			<path class="w" d="M110 50H150M290 50H330" />
+			<rect class="pt" x="150" y="30" width="70" height="40" />
+			<rect class="nt" x="220" y="30" width="70" height="40" />
+			<text class="t b" x="185" y="55" text-anchor="middle">P</text>
+			<text class="t b" x="255" y="55" text-anchor="middle">N</text>
+
+			<text class="s" x="40" y="145">symbol</text>
+			<path class="w" d="M110 140H196M196 122V158L232 140ZM232 122V158M232 140H330" />
+
+			<text class="s" x="40" y="250">real LED</text>
+			<path class="blk" d="M196 250V214A24 24 0 0 1 244 214V250Z" />
+			<path class="blk" d="M188 250H244V259H188Z" />
+			<path class="w" d="M206 259V312M234 259V292" />
+			<path class="thin" d="M246 254L290 240" />
+			<text class="s" x="294" y="242">flat edge on the rim</text>
+		</svg>
+	)
+}
+
+{
+	pic === "led-leak" && (
+		<svg viewBox="0 0 400 290" role="img" aria-label="An 8 V battery with two LEDs in series, both pointing against the battery. The voltage across each LED is unknown.">
+			<path class="w" d="M70 50V120M70 160V250H320V210M320 170V110M320 70V50H70" />
+			<use href="#bat-v" x="70" y="120" />
+			<text class="s" x="88" y="132">+</text>
+			<text class="t b" x="48" y="145" text-anchor="end">8 V</text>
+			<use href="#led-d" transform="translate(320 110) scale(1 -1)" />
+			<use href="#led-d" transform="translate(320 210) scale(1 -1)" />
+			<text class="t b gt" x="300" y="95" text-anchor="end">? V</text>
+			<text class="t b gt" x="300" y="195" text-anchor="end">? V</text>
+		</svg>
+	)
+}
+
+{
+	(pic === "mos-xsec-off" || pic === "mos-xsec-on") && (
+		<svg viewBox="0 0 440 290" role="img" aria-label={pic === "mos-xsec-off" ? "A slice through an N-channel MOSFET: a P-type body with two N-type islands, the source on the left and the drain on the right, and a metal gate on a thin layer of glass between them. The gate is at 0 V. The highlighted path runs from the drain down through its N island, across the P body and up through the source's N island." : "The same slice with the gate 5 V above the source. A thin row of electrons has gathered under the glass, reaching from the source island to the drain island."}>
+			{pic === "mos-xsec-off" && <path class="glow" d="M350 44V200H90V44" />}
+			<rect class="pt" x="30" y="110" width="380" height="140" />
+			<path class="nt" d="M50 110V140Q50 160 70 160H110Q130 160 130 140V110Z" />
+			<path class="nt" d="M310 110V140Q310 160 330 160H370Q390 160 390 140V110Z" />
+			<rect class="ox" x="120" y="100" width="200" height="10" />
+			<rect class="metal" x="130" y="80" width="180" height="20" />
+			<path class="w" d="M90 110V44M220 80V44M350 110V44" />
+			<use href="#term" x="90" y="40" />
+			<use href="#term" x="220" y="40" />
+			<use href="#term" x="350" y="40" />
+			<text class="t b" x="90" y="24" text-anchor="middle">source 0 V</text>
+			<text class="t b" x="220" y="24" text-anchor="middle">{pic === "mos-xsec-off" ? "gate 0 V" : "gate 5 V"}</text>
+			<text class="t b" x="350" y="24" text-anchor="middle">drain</text>
+			<text class="t b" x="112" y="145" text-anchor="middle">N</text>
+			<text class="t b" x="328" y="145" text-anchor="middle">N</text>
+			<text class="t b" x="220" y="236" text-anchor="middle">P (body)</text>
+			{pic === "mos-xsec-on" && (
+				<>
+					{Array.from({ length: 18 }, (_, k) => (
+						<circle class="el" cx={128 + k * 11} cy="115" r="2.8" />
+					))}
+					<text class="s b" x="220" y="136" text-anchor="middle">electrons under the glass</text>
+				</>
+			)}
+			{pic === "mos-xsec-off" && (
+				<>
+					<path class="march" d="M350 44V200H90V44" />
+					<use href="#chev" transform="translate(350 70) rotate(90)" />
+					<use href="#chev" transform="translate(220 200) rotate(180)" />
+					<use href="#chev" transform="translate(90 70) rotate(-90)" />
+				</>
+			)}
+			<rect class="pt" x="30" y="268" width="14" height="10" />
+			<text class="s" x="50" y="277">P-type</text>
+			<rect class="nt" x="110" y="268" width="14" height="10" />
+			<text class="s" x="130" y="277">N-type</text>
+			<rect class="ox" x="190" y="268" width="14" height="10" />
+			<text class="s" x="210" y="277">glass (oxide)</text>
+			<rect class="metal" x="300" y="268" width="14" height="10" />
+			<text class="s" x="320" y="277">metal</text>
+		</svg>
+	)
+}
+
+{
+	pic === "mos-cap" && (
+		<svg viewBox="0 0 600 290" role="img" aria-label="A slice through an N-channel MOSFET whose gate is driven by a pin that steps from 0 V to 5 V. Plus charges line the bottom of the metal gate and electrons gather under the glass. Beside it, a capacitor symbol: two plates with a gap between.">
+			<rect class="pt" x="30" y="110" width="380" height="140" />
+			<path class="nt" d="M50 110V140Q50 160 70 160H110Q130 160 130 140V110Z" />
+			<path class="nt" d="M310 110V140Q310 160 330 160H370Q390 160 390 140V110Z" />
+			<rect class="ox" x="120" y="100" width="200" height="10" />
+			<rect class="metal" x="130" y="80" width="180" height="20" />
+			{Array.from({ length: 8 }, (_, k) => (
+				<text class="plus" x={146 + k * 21} y="96" text-anchor="middle">+</text>
+			))}
+			{Array.from({ length: 18 }, (_, k) => (
+				<circle class="el" cx={128 + k * 11} cy="115" r="2.8" />
+			))}
+			<path class="w" d="M90 110V44M220 80V44M350 110V44" />
+			<use href="#term" x="90" y="40" />
+			<use href="#term" x="220" y="40" />
+			<use href="#term" x="350" y="40" />
+			<text class="t b" x="90" y="24" text-anchor="middle">source 0 V</text>
+			<text class="t b" x="220" y="24" text-anchor="middle">pin: 0 V, then 5 V</text>
+			<text class="t b" x="350" y="24" text-anchor="middle">drain</text>
+			<text class="t b" x="112" y="145" text-anchor="middle">N</text>
+			<text class="t b" x="328" y="145" text-anchor="middle">N</text>
+			<text class="t b" x="220" y="236" text-anchor="middle">P (body)</text>
+
+			<text class="t b" x="510" y="40" text-anchor="middle">a capacitor</text>
+			<path class="w" d="M510 52V118M510 132V198" />
+			<path class="w" d="M488 118H532M488 132H532" style="stroke-width:3" />
+			<text class="s" x="540" y="116">gate</text>
+			<text class="s" x="540" y="144">silicon</text>
+			<text class="s" x="482" y="129" text-anchor="end">glass</text>
+			<text class="s" x="510" y="222" text-anchor="middle">two conductors with</text>
+			<text class="s" x="510" y="238" text-anchor="middle">an insulator between</text>
+			<rect class="pt" x="30" y="268" width="14" height="10" />
+			<text class="s" x="50" y="277">P-type</text>
+			<rect class="nt" x="110" y="268" width="14" height="10" />
+			<text class="s" x="130" y="277">N-type</text>
+			<rect class="ox" x="190" y="268" width="14" height="10" />
+			<text class="s" x="210" y="277">glass (oxide)</text>
+			<rect class="metal" x="300" y="268" width="14" height="10" />
+			<text class="s" x="320" y="277">metal</text>
+		</svg>
+	)
+}
+
+{
+	pic === "pmos-xsec" && (
+		<svg viewBox="0 0 440 290" role="img" aria-label="A slice through a P-channel MOSFET: an N-type body with two P-type islands, the source on the left at 12 V and the drain on the right, and a metal gate on a thin layer of glass between them. The gate voltage is unknown.">
+			<rect class="nt" x="30" y="110" width="380" height="140" />
+			<path class="pt" d="M50 110V140Q50 160 70 160H110Q130 160 130 140V110Z" />
+			<path class="pt" d="M310 110V140Q310 160 330 160H370Q390 160 390 140V110Z" />
+			<rect class="ox" x="120" y="100" width="200" height="10" />
+			<rect class="metal" x="130" y="80" width="180" height="20" />
+			<path class="w" d="M90 110V44M220 80V44M350 110V44" />
+			<use href="#term" x="90" y="40" />
+			<use href="#term" x="220" y="40" />
+			<use href="#term" x="350" y="40" />
+			<text class="t b" x="90" y="24" text-anchor="middle">source 12 V</text>
+			<text class="t b gt" x="220" y="24" text-anchor="middle">gate ?</text>
+			<text class="t b" x="350" y="24" text-anchor="middle">drain</text>
+			<text class="t b" x="112" y="145" text-anchor="middle">P</text>
+			<text class="t b" x="328" y="145" text-anchor="middle">P</text>
+			<text class="t b" x="220" y="236" text-anchor="middle">N (body)</text>
+			<rect class="pt" x="30" y="268" width="14" height="10" />
+			<text class="s" x="50" y="277">P-type</text>
+			<rect class="nt" x="110" y="268" width="14" height="10" />
+			<text class="s" x="130" y="277">N-type</text>
+			<rect class="ox" x="190" y="268" width="14" height="10" />
+			<text class="s" x="210" y="277">glass (oxide)</text>
+			<rect class="metal" x="300" y="268" width="14" height="10" />
+			<text class="s" x="320" y="277">metal</text>
+		</svg>
+	)
+}
+
+{
+	pic === "bjt-xsec" && (
+		<svg viewBox="0 0 460 250" role="img" aria-label="An NPN transistor drawn as three blocks: an N-type emitter, a thin P-type base, and an N-type collector. The emitter is at 0 V, the base at 0.65 V and the collector at 5 V. Arrows show electrons leaving the emitter: most cross the base into the collector, and about 1 in 100 turns out through the base wire.">
+			<rect class="nt" x="30" y="80" width="170" height="80" />
+			<rect class="pt" x="200" y="80" width="36" height="80" />
+			<rect class="nt" x="236" y="80" width="194" height="80" />
+			<path class="w" d="M60 80V44M226 80V44M400 80V44" />
+			<use href="#term" x="60" y="40" />
+			<use href="#term" x="226" y="40" />
+			<use href="#term" x="400" y="40" />
+			<text class="t b" x="60" y="24" text-anchor="middle">emitter 0 V</text>
+			<text class="t b" x="226" y="24" text-anchor="middle">base 0.65 V</text>
+			<text class="t b" x="400" y="24" text-anchor="middle">collector 5 V</text>
+			<text class="t b" x="50" y="152">N</text>
+			<text class="t b" x="218" y="152" text-anchor="middle">P</text>
+			<text class="t b" x="410" y="152">N</text>
+			{[106, 122, 138].map((y) => (
+				<>
+					<circle class="el" cx="80" cy={y} r="3" />
+					<path class="garrow" d={`M86 ${y}H340`} />
+					<polygon class="gfill" points={`348,${y} 339,${y - 4.5} 339,${y + 4.5}`} />
+				</>
+			))}
+			<circle class="el" cx="80" cy="92" r="3" />
+			<path class="garrow" d="M86 92H210V64" />
+			<polygon class="gfill" points="210,56 205.5,65 214.5,65" />
+			<text class="s b" x="202" y="66" text-anchor="end">about 1 in 100</text>
+			<text class="s" x="30" y="194">● electrons, moving the way the arrows point.</text>
+		</svg>
+	)
+}
+
+{
+	pic === "bjt-vbe" && (
+		<svg viewBox="0 0 440 300" role="img" aria-label="A plot of collector current against base-emitter voltage for a typical small silicon transistor, on a scale where each step up is ten times the current. The line is straight: 0.1 mA at 0.54 V, 1 mA at 0.60 V, 10 mA at 0.66 V.">
+			{[30, 80, 130, 180, 230].map((y) => (
+				<path class="grid" d={`M70 ${y}H390`} />
+			))}
+			{[70, 150, 230, 310, 390].map((x) => (
+				<path class="grid" d={`M${x} 30V230`} />
+			))}
+			<path class="thin" d="M70 30V230H390" />
+			{["100", "10", "1", "0.1", "0.01"].map((v, k) => (
+				<text class="s" x="62" y={34 + k * 50} text-anchor="end">{v}</text>
+			))}
+			{["0.48", "0.54", "0.60", "0.66", "0.72"].map((v, k) => (
+				<text class="s" x={70 + k * 80} y="248" text-anchor="middle">{v}</text>
+			))}
+			<path class="garrow" d="M70 230L390 30" style="stroke-width:2.5" />
+			<circle class="bigdot" cx="150" cy="180" r="4.5" />
+			<circle class="bigdot" cx="230" cy="130" r="4.5" />
+			<circle class="bigdot" cx="310" cy="80" r="4.5" />
+			<text class="t b" x="230" y="272" text-anchor="middle">base-emitter voltage (V)</text>
+			<text class="t b" x="22" y="130" text-anchor="middle" transform="rotate(-90 22 130)">collector current (mA)</text>
+			<text class="s" x="230" y="292" text-anchor="middle">a typical small silicon transistor at room temperature</text>
+		</svg>
+	)
+}
+
+{
+	pic === "bjt-np" && (
+		<svg viewBox="0 0 470 250" role="img" aria-label="Two transistor symbols. Left: an NPN, collector at the top and emitter at the bottom, its emitter arrow pointing out. Right: a PNP, emitter at the top and collector at the bottom, its emitter arrow pointing in toward the base.">
+			<path class="w" d="M53.6 120H110M138 90V63.6M138 150V176.4" />
+			<use href="#npn" x="110" y="120" />
+			<use href="#term" x="50" y="120" />
+			<use href="#term" x="138" y="60" />
+			<use href="#term" x="138" y="180" />
+			<text class="t b" x="50" y="100" text-anchor="middle">base</text>
+			<text class="t b" x="152" y="64">collector</text>
+			<text class="t b" x="152" y="184">emitter</text>
+			<text class="t b" x="124" y="232" text-anchor="middle">NPN</text>
+
+			<path class="w" d="M273.6 120H330M358 90V63.6M358 150V176.4" />
+			<use href="#pnp" transform="translate(330 120) scale(1 -1)" />
+			<use href="#term" x="270" y="120" />
+			<use href="#term" x="358" y="60" />
+			<use href="#term" x="358" y="180" />
+			<text class="t b" x="270" y="100" text-anchor="middle">base</text>
+			<text class="t b" x="372" y="64">emitter</text>
+			<text class="t b" x="372" y="184">collector</text>
+			<text class="t b" x="344" y="232" text-anchor="middle">PNP</text>
+		</svg>
+	)
+}
+
+{
+	pic === "elec-dir" && (
+		<svg viewBox="0 0 400 270" role="img" aria-label="A battery and a resistor in one loop, with the battery's + and − ends marked. Which way the electrons move and which way the current is drawn are both unknown.">
+			<path class="w" d="M70 50V120M70 160V230H330V160M330 100V50H70" />
+			<use href="#bat-v" x="70" y="120" />
+			<text class="t b" x="88" y="130">+</text>
+			<text class="t b" x="88" y="154">−</text>
+			<use href="#res-v" x="330" y="100" />
+			<text class="t b" x="200" y="34" text-anchor="middle">electrons move: <tspan class="gt">which way?</tspan></text>
+			<text class="t b" x="200" y="256" text-anchor="middle">current is drawn: <tspan class="gt">which way?</tspan></text>
+		</svg>
+	)
+}
+
+{
+	pic === "pn-depl" && (
+		<svg viewBox="0 0 440 256" role="img" aria-label="The joined P and N blocks after electrons have crossed. Along the boundary is a strip with no free charges, the depletion region. Inside it, negatively charged boron atoms sit on the P side and positively charged phosphorus atoms sit on the N side. Holes remain further into the P side and free electrons further into the N side.">
+			<rect class="pt" x="40" y="50" width="180" height="120" />
+			<rect class="nt" x="220" y="50" width="180" height="120" />
+			<rect class="dep" x="186" y="50" width="68" height="120" />
+			{holesP.filter(([x]) => x < 176).map(([x, y]) => <circle class="hole" cx={x} cy={y} r="4" />)}
+			{holesP.filter(([x]) => x < 176).map(([x, y]) => <circle class="el" cx={440 - x} cy={y} r="3.5" />)}
+			{[72, 110, 148].map((y) => (
+				<>
+					<circle class="ion" cx="203" cy={y} r="7" />
+					<text class="s b" x="203" y={y + 4} text-anchor="middle">−</text>
+					<circle class="ion" cx="237" cy={y} r="7" />
+					<text class="s b" x="237" y={y + 4} text-anchor="middle">+</text>
+				</>
+			))}
+			<text class="t b" x="100" y="36" text-anchor="middle">P-type</text>
+			<text class="t b gt" x="220" y="36" text-anchor="middle">depletion region</text>
+			<text class="t b" x="340" y="36" text-anchor="middle">N-type</text>
+			<circle class="hole" cx="48" cy="196" r="4" />
+			<text class="s" x="58" y="200">hole</text>
+			<circle class="el" cx="110" cy="196" r="3.5" />
+			<text class="s" x="120" y="200">free electron</text>
+			<circle class="ion" cx="48" cy="220" r="7" />
+			<text class="s b" x="48" y="224" text-anchor="middle">−</text>
+			<text class="s" x="62" y="224">boron atom holding an extra electron</text>
+			<circle class="ion" cx="48" cy="242" r="7" />
+			<text class="s b" x="48" y="246" text-anchor="middle">+</text>
+			<text class="s" x="62" y="246">phosphorus atom that lost its spare electron</text>
+		</svg>
+	)
+}
+
+{
+	pic === "pn-flow" && (
+		<svg viewBox="0 0 470 240" role="img" aria-label="A P and N block wired to a battery with + on the P side. In the P block, holes drift right toward the boundary. In the N block, electrons drift left toward it. In the wire on the right, electrons flow from the battery's − end into the N side. In the wire on the left, electrons flow out of the P side toward the battery's + end.">
+			<rect class="pt" x="150" y="50" width="100" height="60" />
+			<rect class="nt" x="250" y="50" width="100" height="60" />
+			<text class="t b" x="200" y="40" text-anchor="middle">P</text>
+			<text class="t b" x="300" y="40" text-anchor="middle">N</text>
+			{[[166, 66], [194, 94], [222, 68], [180, 100]].map(([x, y]) => <circle class="hole" cx={x} cy={y} r="4" />)}
+			{[[278, 68], [306, 94], [334, 66], [320, 100]].map(([x, y]) => <circle class="el" cx={x} cy={y} r="3.5" />)}
+			<path class="garrow" d="M172 82H232" />
+			<polygon class="gfill" points="240,82 231,77.5 231,86.5" />
+			<path class="garrow" d="M328 82H268" />
+			<polygon class="gfill" points="260,82 269,77.5 269,86.5" />
+			<path class="w" d="M150 80H70V210H220M260 210H420V80H350" />
+			<use href="#bat-v" transform="translate(220 210) rotate(-90)" />
+			<text class="t b" x="224" y="196" text-anchor="middle">+</text>
+			<text class="t b" x="258" y="196" text-anchor="middle">−</text>
+			<path class="garrow" d="M420 190V104" />
+			<polygon class="gfill" points="420,96 415.5,105 424.5,105" />
+			<text class="s b" x="412" y="150" text-anchor="end">electrons pushed in</text>
+			<path class="garrow" d="M70 100V182" />
+			<polygon class="gfill" points="70,190 65.5,181 74.5,181" />
+			<text class="s b" x="80" y="140">electrons pulled out,</text>
+			<text class="s b" x="80" y="156">leaving new holes</text>
+		</svg>
+	)
+}
+
+{
+	(pic === "box-mos" || pic === "box-bjt") && (
+		<svg viewBox="0 0 420 290" role="img" aria-label={pic === "box-mos" ? "A 12 V supply, a 2 A motor and an unknown box in series to GND. A pin that switches between 0 V and 5 V connects to the box and supplies almost no current." : "A 12 V supply, a 2 A motor and an unknown box in series to GND. A 20 mA current from a pin flows into the box."}>
+			<text class="t b" x="260" y="20" text-anchor="middle">12 V</text>
+			<path class="w" d="M242 28H278M260 28V68M260 112V150M260 200V250M93.6 175H236" />
+			<circle class="meter" cx="260" cy="90" r="22" />
+			<text class="t b" x="260" y="95" text-anchor="middle">M</text>
+			<text class="t b" x="292" y="94">motor, 2 A</text>
+			<rect class="blk" x="236" y="150" width="48" height="50" />
+			<text class="t b gt" x="260" y="182" text-anchor="middle" style="font-size:22px">?</text>
+			<use href="#gnd" x="260" y="250" />
+			<use href="#term" x="90" y="175" />
+			{pic === "box-mos" ? (
+				<>
+					<text class="t b" x="90" y="155" text-anchor="middle">pin: 0 V or 5 V</text>
+					<text class="s" x="90" y="200" text-anchor="middle">almost no current</text>
+				</>
+			) : (
+				<>
+					<text class="t b" x="90" y="155" text-anchor="middle">pin</text>
+					<path class="thin" d="M130 192H180" />
+					<polygon class="mf" points="188,192 179,187.5 179,196.5" />
+					<text class="s b" x="160" y="212" text-anchor="middle">20 mA</text>
+				</>
+			)}
+		</svg>
+	)
+}
+
+{
+	pic === "bjt-spot" && (
+		<svg viewBox="0 0 460 240" role="img" aria-label="Two transistor symbols with their pins unlabelled. A: a MOSFET, its gate drawn as a separate plate. B: a BJT, a circle with a bar and an arrow on one leg.">
+			<path class="w" d="M53.6 120H110M138 90V63.6M138 150V176.4" />
+			<use href="#nmos" x="110" y="120" />
+			<use href="#term" x="50" y="120" />
+			<use href="#term" x="138" y="60" />
+			<use href="#term" x="138" y="180" />
+			<text class="t b" x="124" y="226" text-anchor="middle">A</text>
+			<path class="w" d="M273.6 120H330M358 90V63.6M358 150V176.4" />
+			<use href="#npn" x="330" y="120" />
+			<use href="#term" x="270" y="120" />
+			<use href="#term" x="358" y="60" />
+			<use href="#term" x="358" y="180" />
+			<text class="t b" x="344" y="226" text-anchor="middle">B</text>
+		</svg>
+	)
+}
+
+{
+	pic === "pnp-xsec" && (
+		<svg viewBox="0 0 460 220" role="img" aria-label="A PNP transistor drawn as three blocks: a P-type emitter at 5 V, a thin N-type base whose voltage is unknown, and a P-type collector at 0 V. Arrows show holes leaving the emitter: most cross the base into the collector, and about 1 in 100 turns out through the base wire.">
+			<rect class="pt" x="30" y="80" width="170" height="80" />
+			<rect class="nt" x="200" y="80" width="36" height="80" />
+			<rect class="pt" x="236" y="80" width="194" height="80" />
+			<path class="w" d="M60 80V44M226 80V44M400 80V44" />
+			<use href="#term" x="60" y="40" />
+			<use href="#term" x="226" y="40" />
+			<use href="#term" x="400" y="40" />
+			<text class="t b" x="60" y="24" text-anchor="middle">emitter 5 V</text>
+			<text class="t b gt" x="226" y="24" text-anchor="middle">base ?</text>
+			<text class="t b" x="400" y="24" text-anchor="middle">collector 0 V</text>
+			<text class="t b" x="50" y="152">P</text>
+			<text class="t b" x="218" y="152" text-anchor="middle">N</text>
+			<text class="t b" x="410" y="152">P</text>
+			{[106, 122, 138].map((y) => (
+				<>
+					<circle class="hole" cx="80" cy={y} r="3.5" />
+					<path class="garrow" d={`M86 ${y}H340`} />
+					<polygon class="gfill" points={`348,${y} 339,${y - 4.5} 339,${y + 4.5}`} />
+				</>
+			))}
+			<circle class="hole" cx="80" cy="92" r="3.5" />
+			<path class="garrow" d="M86 92H210V64" />
+			<polygon class="gfill" points="210,56 205.5,65 214.5,65" />
+			<text class="s b" x="202" y="66" text-anchor="end">about 1 in 100</text>
+			<circle class="hole" cx="34" cy="190" r="3.5" />
+			<text class="s" x="44" y="194">holes, moving the way the arrows point</text>
+		</svg>
+	)
+}
+
+{
+	(pic === "brk-gate-high" || pic === "brk-gate-neg") && (
+		<svg viewBox="0 0 320 220" role="img" aria-label={pic === "brk-gate-high" ? "An N-channel MOSFET with its gate at 30 V and its source at 0 V. Its gate is rated to stay within 20 V of the source." : "An N-channel MOSFET with its gate at minus 5 V and its source at 0 V. Its gate is rated to stay within 20 V of the source."}>
+			<path class="w" d="M73.6 110H130M158 80V43.6M158 140V176.4" />
+			<use href="#nmos" x="130" y="110" />
+			<use href="#term" x="70" y="110" />
+			<use href="#term" x="158" y="40" />
+			<use href="#term" x="158" y="180" />
+			<text class="t b gt" x="70" y="90" text-anchor="middle">{pic === "brk-gate-high" ? "gate 30 V" : "gate −5 V"}</text>
+			<text class="t b" x="172" y="44">drain</text>
+			<text class="t b" x="172" y="184">source 0 V</text>
+			<text class="s b" x="184" y="106">rated: gate within</text>
+			<text class="s b" x="184" y="121">20 V of the source</text>
+		</svg>
+	)
+}
+
+{
+	pic === "brk-float" && (
+		<svg viewBox="60 0 300 270" role="img" aria-label="A 12 V supply, a 6 Ω load and an N-channel MOSFET below the load with its source to GND. The wire to the gate is broken, so the gate connects to nothing.">
+			<text class="t b" x="230" y="20" text-anchor="middle">12 V</text>
+			<path class="w" d="M212 28H248M230 28V60M230 120V140M230 200V240M113.6 170H138M162 170H202" />
+			<path class="thin" d="M136 178L142 162M158 178L164 162" />
+			<use href="#res-v" x="230" y="60" />
+			<text class="s" x="244" y="94">load, 6 Ω</text>
+			<use href="#nmos" x="202" y="170" />
+			<use href="#gnd" x="230" y="240" />
+			<use href="#term" x="110" y="170" />
+			<text class="t b gt" x="110" y="150" text-anchor="middle">gate wire loose</text>
+			<text class="s" x="196" y="163" text-anchor="end">G</text>
+			<text class="s" x="240" y="150">D</text>
+			<text class="s" x="240" y="198">S</text>
+		</svg>
+	)
+}
+
+{
+	(pic === "brk-base-direct" || pic === "brk-sat") && (
+		<svg viewBox="0 0 360 280" role="img" aria-label={pic === "brk-base-direct" ? "An NPN transistor with a load from 12 V to its collector and its emitter to GND. A 5 V pin connects straight to the base with no resistor." : "An NPN transistor with a load from 12 V to its collector and its emitter to GND, driven from a 5 V pin through a base resistor. The base sits at 0.75 V and the collector at 0.2 V."}>
+			<text class="t b" x="228" y="20" text-anchor="middle">12 V</text>
+			<path class="w" d="M210 28H246M228 28V60M228 120V140M228 200V240" />
+			<use href="#res-v" x="228" y="60" />
+			<text class="s" x="242" y="94">load</text>
+			<use href="#npn" x="200" y="170" />
+			<use href="#gnd" x="228" y="240" />
+			<use href="#term" x="40" y="170" />
+			<text class="t b" x="40" y="150" text-anchor="middle">pin 5 V</text>
+			{pic === "brk-base-direct" ? (
+				<>
+					<path class="w" d="M43.6 170H200" />
+					<text class="t b gt" x="120" y="194" text-anchor="middle">no resistor</text>
+					<text class="s" x="238" y="148">C</text>
+					<text class="s" x="238" y="200">E</text>
+				</>
+			) : (
+				<>
+					<path class="w" d="M43.6 170H110M170 170H200" />
+					<use href="#res-h" x="110" y="170" />
+					<text class="t b gt" x="196" y="154" text-anchor="end">base 0.75 V</text>
+					<text class="t b gt" x="238" y="136">collector 0.2 V</text>
+					<text class="t b" x="238" y="212">emitter 0 V</text>
+				</>
+			)}
+		</svg>
+	)
+}
+
+{
+	pic === "brk-be-rev" && (
+		<svg viewBox="0 0 330 220" role="img" aria-label="An NPN transistor with its base at 0 V, its emitter at 12 V and its collector unconnected. Its base-emitter junction is rated for 6 V backwards.">
+			<path class="w" d="M73.6 110H130M158 80V43.6M158 140V176.4" />
+			<use href="#npn" x="130" y="110" />
+			<use href="#term" x="70" y="110" />
+			<use href="#term" x="158" y="40" />
+			<use href="#term" x="158" y="180" />
+			<text class="t b" x="70" y="90" text-anchor="middle">base 0 V</text>
+			<text class="t b" x="172" y="44">collector, open</text>
+			<text class="t b gt" x="172" y="184">emitter 12 V</text>
+			<text class="s b" x="192" y="106">rated: 6 V backwards</text>
+			<text class="s b" x="192" y="121">from emitter to base</text>
+		</svg>
+	)
+}
+
+{
+	pic === "ch-what" && (
+		<Channel current={null} label="The full beacon channel: a 24 V rail, the 12-LED hoop, Q1, R_S, Q2, R_G from the tone pin and R_OFF." />
+	)
+}
+
+{
+	pic === "ch-settle" && (
+		<svg viewBox="0 0 380 270" role="img" aria-label="Two candidate curves of LED current against time after the tone pin goes high. Curve A overshoots past its final value and rings before settling. Curve B climbs smoothly and levels off without overshooting.">
+			{[0, 50, 100].map((v) => (
+				<>
+					<path class="grid" d={`M50 ${220 - (v * 200) / 140}H350`} />
+					<text class="s" x="42" y={224 - (v * 200) / 140} text-anchor="end">{v}</text>
+				</>
+			))}
+			{[0, 5, 10, 15, 20].map((v) => (
+				<text class="s" x={50 + v * 15} y="238" text-anchor="middle">{v}</text>
+			))}
+			<path class="thin" d="M50 20V220H350" />
+			<path class="wave-a" d="M50.0 220.0 L51.9 220.0 L53.8 220.0 L55.6 220.0 L57.5 220.0 L59.4 220.0 L61.2 220.0 L63.1 220.0 L65.0 220.0 L66.9 220.0 L68.8 220.0 L70.6 220.0 L72.5 220.0 L74.4 220.0 L76.2 220.0 L78.1 220.0 L80.0 220.0 L81.9 220.0 L83.8 220.0 L85.6 220.0 L87.5 220.0 L89.4 220.0 L91.2 220.0 L93.1 220.0 L95.0 220.0 L96.9 220.0 L98.8 220.0 L100.6 220.0 L102.5 220.0 L104.4 220.0 L106.2 220.0 L108.1 220.0 L110.0 220.0 L111.9 220.0 L113.8 220.0 L115.6 220.0 L117.5 220.0 L119.4 219.8 L121.2 214.4 L123.1 202.7 L125.0 186.4 L126.9 167.2 L128.8 146.8 L130.6 126.5 L132.5 107.3 L134.4 90.1 L136.2 75.5 L138.1 63.7 L140.0 55.0 L141.9 49.2 L143.8 46.2 L145.6 45.5 L147.5 46.9 L149.4 49.8 L151.2 53.8 L153.1 58.5 L155.0 63.5 L156.9 68.5 L158.8 73.3 L160.6 77.5 L162.5 81.1 L164.4 84.0 L166.2 86.2 L168.1 87.6 L170.0 88.3 L171.9 88.5 L173.8 88.2 L175.6 87.5 L177.5 86.5 L179.4 85.3 L181.2 84.1 L183.1 82.8 L185.0 81.7 L186.9 80.6 L188.8 79.7 L190.6 79.0 L192.5 78.5 L194.4 78.1 L196.2 77.9 L198.1 77.9 L200.0 78.0 L201.9 78.2 L203.8 78.4 L205.6 78.7 L207.5 79.0 L209.4 79.3 L211.2 79.6 L213.1 79.8 L215.0 80.1 L216.9 80.2 L218.8 80.4 L220.6 80.5 L222.5 80.5 L224.4 80.5 L226.2 80.5 L228.1 80.5 L230.0 80.4 L231.9 80.3 L233.8 80.2 L235.6 80.2 L237.5 80.1 L239.4 80.0 L241.2 80.0 L243.1 79.9 L245.0 79.9 L246.9 79.9 L248.8 79.9 L250.6 79.9 L252.5 79.9 L254.4 79.9 L256.2 79.9 L258.1 79.9 L260.0 79.9 L261.9 80.0 L263.8 80.0 L265.6 80.0 L267.5 80.0 L269.4 80.0 L271.2 80.0 L273.1 80.0 L275.0 80.0 L276.9 80.0 L278.8 80.0 L280.6 80.0 L282.5 80.0 L284.4 80.0 L286.2 80.0 L288.1 80.0 L290.0 80.0 L291.9 80.0 L293.8 80.0 L295.6 80.0 L297.5 80.0 L299.4 80.0 L301.2 80.0 L303.1 80.0 L305.0 80.0 L306.9 80.0 L308.8 80.0 L310.6 80.0 L312.5 80.0 L314.4 80.0 L316.2 80.0 L318.1 80.0 L320.0 80.0 L321.9 80.0 L323.8 80.0 L325.6 80.0 L327.5 80.0 L329.4 80.0 L331.2 80.0 L333.1 80.0 L335.0 80.0 L336.9 80.0 L338.8 80.0 L340.6 80.0 L342.5 80.0 L344.4 80.0 L346.2 80.0 L348.1 80.0 L350.0 80.0" />
+			<path class="wave-b" d="M50.0 220.0 L51.9 220.0 L53.8 220.0 L55.6 220.0 L57.5 220.0 L59.4 220.0 L61.2 220.0 L63.1 220.0 L65.0 220.0 L66.9 220.0 L68.8 220.0 L70.6 220.0 L72.5 220.0 L74.4 220.0 L76.2 220.0 L78.1 220.0 L80.0 220.0 L81.9 220.0 L83.8 220.0 L85.6 220.0 L87.5 220.0 L89.4 220.0 L91.2 220.0 L93.1 220.0 L95.0 220.0 L96.9 220.0 L98.8 220.0 L100.6 220.0 L102.5 220.0 L104.4 220.0 L106.2 220.0 L108.1 220.0 L110.0 220.0 L111.9 219.9 L113.8 219.9 L115.6 219.9 L117.5 219.8 L119.4 219.6 L121.2 219.1 L123.1 218.1 L125.0 216.2 L126.9 213.0 L128.8 208.3 L130.6 202.1 L132.5 194.5 L134.4 185.9 L136.2 176.6 L138.1 166.9 L140.0 156.9 L141.9 146.8 L143.8 136.7 L145.6 126.8 L147.5 117.0 L149.4 107.4 L151.2 98.2 L153.1 89.9 L155.0 83.8 L156.9 81.0 L158.8 80.3 L160.6 80.2 L162.5 80.2 L164.4 80.2 L166.2 80.2 L168.1 80.2 L170.0 80.2 L171.9 80.2 L173.8 80.2 L175.6 80.2 L177.5 80.2 L179.4 80.2 L181.2 80.2 L183.1 80.2 L185.0 80.2 L186.9 80.2 L188.8 80.2 L190.6 80.2 L192.5 80.2 L194.4 80.2 L196.2 80.2 L198.1 80.2 L200.0 80.2 L201.9 80.2 L203.8 80.2 L205.6 80.2 L207.5 80.2 L209.4 80.2 L211.2 80.2 L213.1 80.2 L215.0 80.2 L216.9 80.2 L218.8 80.2 L220.6 80.2 L222.5 80.2 L224.4 80.2 L226.2 80.2 L228.1 80.2 L230.0 80.2 L231.9 80.2 L233.8 80.2 L235.6 80.2 L237.5 80.2 L239.4 80.2 L241.2 80.2 L243.1 80.2 L245.0 80.2 L246.9 80.2 L248.8 80.2 L250.6 80.2 L252.5 80.2 L254.4 80.2 L256.2 80.2 L258.1 80.2 L260.0 80.2 L261.9 80.2 L263.8 80.2 L265.6 80.2 L267.5 80.2 L269.4 80.2 L271.2 80.2 L273.1 80.2 L275.0 80.2 L276.9 80.2 L278.8 80.2 L280.6 80.2 L282.5 80.2 L284.4 80.2 L286.2 80.2 L288.1 80.2 L290.0 80.2 L291.9 80.2 L293.8 80.2 L295.6 80.2 L297.5 80.2 L299.4 80.2 L301.2 80.2 L303.1 80.2 L305.0 80.2 L306.9 80.2 L308.8 80.2 L310.6 80.2 L312.5 80.2 L314.4 80.2 L316.2 80.2 L318.1 80.2 L320.0 80.2 L321.9 80.2 L323.8 80.2 L325.6 80.2 L327.5 80.2 L329.4 80.2 L331.2 80.2 L333.1 80.2 L335.0 80.2 L336.9 80.2 L338.8 80.2 L340.6 80.2 L342.5 80.2 L344.4 80.2 L346.2 80.2 L348.1 80.2 L350.0 80.2" />
+			<text class="t b" x="160" y="44">A</text>
+			<text class="t b" x="250" y="72">B</text>
+			<text class="t b" x="200" y="260" text-anchor="middle">time after the tone pin goes high (µs)</text>
+			<text class="t b" x="14" y="120" text-anchor="middle" transform="rotate(-90 14 120)">LED current (mA)</text>
+		</svg>
+	)
+}
+
+{
+	pic === "ch-main" && (
+		<Channel
+			tone="tone in (high)"
+			flow={mainFlow}
+			chev={mainChev}
+			label="The beacon channel with the tone pin high. The highlighted path runs from +24 V through the 12 LEDs, into Q1's drain, out its source, and through R_S to GND."
+		/>
+	)
+}
+{
+	pic === "ch-gate" && (
+		<Channel
+			tone="tone in (high)"
+			flow="M114 380H413L430 410V520H306"
+			chev={[
+				[136, 380, 0],
+				[320, 380, 0],
+				[430, 425, 90],
+				[372, 520, 180],
+			]}
+			label="The beacon channel with the tone pin high. The highlighted path runs from the tone pin through R_G, into Q1's gate, out its source, and through R_S to GND."
+		/>
+	)
+}
+{pic === "ch-q1" && <Channel hl="q1" label="The beacon channel with Q1 highlighted." />}
+{pic === "ch-rs" && <Channel hl="rs" label="The beacon channel with R_S highlighted." />}
+{pic === "ch-q2" && <Channel hl="q2" label="The beacon channel with Q2 highlighted." />}
+{
+	pic === "ch-creep" && (
+		<Channel
+			current="creeps above 98 mA"
+			label="The beacon channel with the LED current creeping above 98 mA."
+		/>
+	)
+}
+{
+	pic === "ch-q2-path" && (
+		<Channel
+			tone="tone in (high)"
+			current="settled at 98 mA"
+			flow={q2Flow}
+			chev={q2Chev}
+			label="The beacon channel, lit and settled at 98 mA. The highlighted path runs from the tone pin through R_G, into Q2's collector and out its emitter to GND."
+		/>
+	)
+}

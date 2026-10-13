@@ -1,0 +1,930 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import LogbookHeader from "../../components/LogbookHeader.astro";
+import HomeButton from "../../components/HomeButton.astro";
+import { logbooks } from "../../data/logbooks";
+import { gapNotes, gapKinds, silenceNotes } from "../../data/logbookGaps";
+import EntryThumbs from "../../components/EntryThumbs.astro";
+import { entryImages } from "../../lib/entryImages";
+import { inlineCode } from "../../lib/inlineCode";
+
+const DAY = 86400000;
+const GAP_DAYS = 14;
+
+const raw = await getCollection("logbook", (entry) =>
+	import.meta.env.PROD ? !entry.data.draft : true,
+);
+
+const books = Object.fromEntries(logbooks.map((l) => [l.slug, l]));
+const sortedBooks = [...logbooks].sort((a, b) => a.order - b.order);
+
+const all = raw
+	.map((e) => {
+		const [project, ...rest] = e.id.split("/");
+		return {
+			project,
+			slug: rest.join("/"),
+			title: e.data.title,
+			summary: e.data.summary,
+			tags: e.data.tags ?? [],
+			images: entryImages(e.body),
+			draft: e.data.draft,
+			date: e.data.date,
+			t: e.data.date.getTime(),
+		};
+	})
+	.filter((e) => books[e.project])
+	.sort((a, b) => b.t - a.t || b.slug.localeCompare(a.slug));
+
+const iso = (t: number | Date) => new Date(t).toISOString().slice(0, 10);
+const fmtLong = (t: number) =>
+	new Date(t).toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+		timeZone: "UTC",
+	});
+const fmtShort = (t: number) =>
+	new Date(t).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		timeZone: "UTC",
+	});
+const fmtMonth = (t: number) =>
+	new Date(t).toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "long",
+		timeZone: "UTC",
+	});
+const monthShort = (t: number) =>
+	new Date(t).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+const monthKey = (t: number) => {
+	const d = new Date(t);
+	return d.getUTCFullYear() * 12 + d.getUTCMonth();
+};
+const monday = (t: number) => t - ((new Date(t).getUTCDay() + 6) % 7) * DAY;
+const rangeText = (from: number, to: number) =>
+	`${fmtShort(from)} to ${fmtShort(to)}, ${new Date(to).getUTCFullYear()}`;
+const pcStyle = (slug: string) =>
+	`--pc:${books[slug].color};--pt:${books[slug].textColor ?? books[slug].color}`;
+
+// gaps are found per project and hung under the entry that ended them
+type Gap = { from: number; to: number; days: number; project: string };
+const gapEndingAt = new Map<string, Gap>();
+const lastEntry = new Map<string, number>();
+for (const slug of Object.keys(books)) {
+	const own = all
+		.filter((e) => e.project === slug)
+		.sort((a, b) => a.t - b.t || a.slug.localeCompare(b.slug));
+	for (let i = 1; i < own.length; i++) {
+		const days = Math.round((own[i].t - own[i - 1].t) / DAY);
+		if (days >= GAP_DAYS) {
+			gapEndingAt.set(`${slug}/${own[i].slug}`, {
+				from: own[i - 1].t,
+				to: own[i].t,
+				days,
+				project: slug,
+			});
+		}
+	}
+	if (own.length) lastEntry.set(slug, own[own.length - 1].t);
+}
+const noteFor = (g: Gap) =>
+	gapNotes.find((n) => n.project === g.project && n.from === iso(g.from));
+
+// weekly strip, oldest on the left
+const weekCounts = new Map<number, Map<string, number>>();
+for (const e of all) {
+	const w = monday(e.t);
+	if (!weekCounts.has(w)) weekCounts.set(w, new Map());
+	const m = weekCounts.get(w)!;
+	m.set(e.project, (m.get(e.project) ?? 0) + 1);
+}
+const times = all.map((e) => e.t);
+const firstWeek = monday(Math.min(...times));
+const lastWeek = monday(Math.max(...times));
+const silences = silenceNotes.map((s) => ({
+	from: Date.parse(s.from),
+	to: Date.parse(s.to),
+	kind: s.kind,
+}));
+type Silence = { from: number; to: number; kind: "lost" | "paused" };
+const weeks: {
+	start: number;
+	total: number;
+	segs: string[];
+	silence?: Silence;
+}[] = [];
+for (let w = firstWeek; w <= lastWeek; w += 7 * DAY) {
+	const counts = weekCounts.get(w);
+	const segs: string[] = [];
+	if (counts) {
+		for (const b of sortedBooks) {
+			for (let k = 0; k < (counts.get(b.slug) ?? 0); k++) segs.push(b.slug);
+		}
+	}
+	const silence = silences.find((s) => w > s.from && w + 7 * DAY <= s.to);
+	weeks.push({ start: w, total: segs.length, segs, silence });
+}
+
+// runs of this many empty weeks or more fold into one short dotted marker
+const FOLD_WEEKS = 4;
+type Cell =
+	| { kind: "fold"; from: number; to: number; count: number; silence?: Silence }
+	| { kind: "week"; w: (typeof weeks)[number]; month?: string; year?: number };
+const cells: Cell[] = [];
+let shownMonth = -1;
+let shownYear = -1;
+for (let i = 0; i < weeks.length; ) {
+	let j = i;
+	while (j < weeks.length && weeks[j].total === 0) j++;
+	if (j - i >= FOLD_WEEKS) {
+		const run = weeks.slice(i, j);
+		const s = run[0].silence;
+		cells.push({
+			kind: "fold",
+			from: run[0].start,
+			to: run[run.length - 1].start + 6 * DAY,
+			count: run.length,
+			silence: s && run.every((r) => r.silence === s) ? s : undefined,
+		});
+		shownMonth = -1;
+		i = j;
+		continue;
+	}
+	const w = weeks[i];
+	// a week belongs to the month holding its thursday, so most of its days
+	const mid = w.start + 3 * DAY;
+	const mk = monthKey(mid);
+	const year = new Date(mid).getUTCFullYear();
+	const labelled = mk !== shownMonth;
+	cells.push({
+		kind: "week",
+		w,
+		month: labelled ? monthShort(mid) : undefined,
+		year: labelled && year !== shownYear ? year : undefined,
+	});
+	if (labelled) shownYear = year;
+	shownMonth = mk;
+	i++;
+}
+
+// each month's label spans all of its shown weeks, so every bar sits under its month
+type LabelGroup =
+	| { kind: "fold" }
+	| { kind: "month"; n: number; month: string; year?: number; tight?: boolean };
+const labelGroups: LabelGroup[] = [];
+for (const c of cells) {
+	const last = labelGroups[labelGroups.length - 1];
+	if (c.kind === "fold") labelGroups.push({ kind: "fold" });
+	else if (c.month || last?.kind !== "month")
+		labelGroups.push({ kind: "month", n: 1, month: c.month ?? "", year: c.year });
+	else last.n++;
+}
+// a one-week month beside another month has no room for its label on a phone
+labelGroups.forEach((g, k) => {
+	if (g.kind !== "month" || g.n > 1) return;
+	g.tight = [labelGroups[k - 1], labelGroups[k + 1]].some((x) => x?.kind === "month");
+});
+
+// the first list entry of each week carries the anchor the strip links to
+const anchored = new Set<number>();
+type Item =
+	| { kind: "month"; label: string }
+	| {
+			kind: "entry";
+			e: (typeof all)[number];
+			anchor?: string;
+			gap?: Gap;
+			shipped: boolean;
+	  };
+const items: Item[] = [];
+let lastLabel: string | null = null;
+for (const e of all) {
+	const label = fmtMonth(e.t);
+	if (label !== lastLabel) {
+		items.push({ kind: "month", label });
+		lastLabel = label;
+	}
+	const w = monday(e.t);
+	let anchor: string | undefined;
+	if (!anchored.has(w)) {
+		anchored.add(w);
+		anchor = `w-${iso(w)}`;
+	}
+	items.push({
+		kind: "entry",
+		e,
+		anchor,
+		gap: gapEndingAt.get(`${e.project}/${e.slug}`),
+		shipped:
+			books[e.project].status === "shipped" && lastEntry.get(e.project) === e.t,
+	});
+}
+
+const projectCount = new Set(all.map((e) => e.project)).size;
+---
+
+<BaseLayout
+	title="Logbook | Amjad Yaghi"
+	description="Every logbook entry from every project, in date order."
+>
+	<LogbookHeader />
+
+	<main class="wrap">
+		<header class="masthead" data-aos="fade-up" data-aos-duration="1500">
+			<p class="kicker mono">Logbook</p>
+			<h1>Everything, in order</h1>
+			<p class="lede">A timeline of every entry on all my public projects.</p>
+			<p class="stat mono">
+				{all.length} entries, {projectCount} projects
+			</p>
+			<ul class="pkey" role="list">
+				{
+					sortedBooks.map((b) => (
+						<li>
+							<a href={`/logbook/${b.slug}`} class="chip" style={pcStyle(b.slug)}>
+								{b.title}
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</header>
+
+		<div class="strip">
+			<div class="bars">
+				{
+					cells.map((c) => {
+						if (c.kind === "fold") {
+							const tip = c.silence
+								? `${gapKinds[c.silence.kind].label}: ${gapKinds[c.silence.kind].note}`
+								: `${c.count} weeks with no logs, ${rangeText(c.from, c.to)}`;
+							return (
+								<span class:list={["fold", c.silence && "silent"]} title={tip} aria-label={tip}>
+									<span class="ft long">
+										{c.count} weeks
+										<br />
+										no logs
+									</span>
+									<span class="ft short">{c.count} wks</span>
+									<span class="dots" />
+								</span>
+							);
+						}
+						const w = c.w;
+						const inner = (
+							<>
+								<div class="n">{w.total ? w.total : ""}</div>
+								<div class="stack">
+									{w.segs.map((slug) => (
+										<div class="seg" style={pcStyle(slug)} />
+									))}
+								</div>
+								<div class="base" />
+							</>
+						);
+						const tip = w.silence
+							? `${gapKinds[w.silence.kind].label}: ${gapKinds[w.silence.kind].note}`
+							: `Week of ${fmtShort(w.start)}: ${w.total} ${w.total === 1 ? "entry" : "entries"}`;
+						return w.total ? (
+							<a href={`#w-${iso(w.start)}`} class="wk" title={tip} aria-label={tip}>
+								{inner}
+							</a>
+						) : (
+							<span class:list={["wk empty", w.silence && "silent"]} title={tip} aria-label={tip}>
+								{inner}
+							</span>
+						);
+					})
+				}
+			</div>
+			<div class="wlabels">
+				{
+					labelGroups.map((g) =>
+						g.kind === "fold" ? (
+							<span class="fold" />
+						) : (
+							<span
+								class:list={["mg", g.tight && "tight"]}
+								style={`flex:${g.n} 1 ${(g.n - 1) * 3}px`}
+							>
+								{g.month}
+								{g.year && <b>{` ${g.year}`}</b>}
+							</span>
+						),
+					)
+				}
+			</div>
+		</div>
+
+		<div class="spine" data-aos="fade-up" data-aos-duration="2000">
+			<ol>
+				{
+					items.map((item) =>
+						item.kind === "month" ? (
+							<li class="mchip">
+								<span>{item.label}</span>
+							</li>
+						) : (
+							<>
+								{item.shipped && (
+									<li class="shipped">
+										<div class="box">
+											<span class="t">Shipped</span>
+											<span class="chip" style={pcStyle(item.e.project)}>
+												{books[item.e.project].title}
+											</span>
+											<span class="range">
+												last entry {fmtLong(item.e.t)}. No more entries for now!
+											</span>
+										</div>
+									</li>
+								)}
+								<li
+									class="entry entry-item"
+									id={item.anchor}
+									style={pcStyle(item.e.project)}
+								>
+									<div class="meta">
+										<time datetime={iso(item.e.t)}>{fmtLong(item.e.t)}</time>
+										<span class="chip">{books[item.e.project].title}</span>
+										{item.e.draft && <span class="chip plain">draft</span>}
+									</div>
+									<h2>
+										<a href={`/logbook/${item.e.project}/${item.e.slug}`}>
+											{item.e.title}
+										</a>
+									</h2>
+									<p set:html={inlineCode(item.e.summary)} />
+									<EntryThumbs images={item.e.images} />
+									{item.e.tags.length > 0 && (
+										<ul class="tags" role="list">
+											{item.e.tags.map((tag) => (
+												<li>{tag}</li>
+											))}
+										</ul>
+									)}
+								</li>
+								{silences
+									.filter((s) => s.to === item.e.t)
+									.map((s) => (
+										<li class={`gap ${s.kind}`}>
+											<div class="box">
+												<div class="gl">
+													<b>{gapKinds[s.kind].label}</b>
+												</div>
+												<p class="quote">{gapKinds[s.kind].note}</p>
+												<div class="range">
+													Paused making entries · {rangeText(s.from, s.to)}
+												</div>
+											</div>
+										</li>
+									))}
+								{item.gap &&
+									(() => {
+										const g = item.gap!;
+										const n = noteFor(g);
+										const k = n ? gapKinds[n.kind] : null;
+										const cls = n ? n.kind : "plain";
+										return (
+											<li class={`gap ${cls}`} style={pcStyle(g.project)}>
+												<div class="box">
+													{k ? (
+														<>
+															<div class="gl">
+																<b>{k.label}</b>
+																<span class="chip">{books[g.project].title}</span>
+															</div>
+															<p class="quote">{n?.note ?? k.note}</p>
+														</>
+													) : (
+														<div class="gl">
+															<span>{g.days} days since the last entry for this project</span>
+															<span class="chip">{books[g.project].title}</span>
+														</div>
+													)}
+													<div class="range">{rangeText(g.from, g.to)}</div>
+												</div>
+											</li>
+										);
+									})()}
+							</>
+						),
+					)
+				}
+			</ol>
+		</div>
+
+		<div class="home" data-aos="fade-up" data-aos-duration="2000">
+			<HomeButton />
+		</div>
+
+		<div class="foot" aria-hidden="true">
+			<i data-aos="fade-up" data-aos-duration="2000"></i>
+			<i data-aos="fade-up" data-aos-duration="2500"></i>
+			<i data-aos="fade-up" data-aos-duration="3000"></i>
+		</div>
+	</main>
+</BaseLayout>
+
+<style is:global>
+	html {
+		scroll-behavior: smooth;
+	}
+</style>
+
+<style>
+	.wrap {
+		--g: #00a86b;
+		--ink: #1e293b;
+		--paper: #fafafa;
+		--mute: rgba(0, 168, 107, 0.7);
+		--line: rgba(0, 168, 107, 0.3);
+		--sun: #8a6d1a;
+		max-width: 64rem;
+		margin: 0 auto;
+		padding: 0 16px;
+		color: var(--ink);
+	}
+	.mono {
+		font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 12px;
+	}
+	.masthead {
+		margin-top: 48px;
+		text-align: center;
+	}
+	.kicker,
+	.stat {
+		color: var(--mute);
+		margin: 0;
+	}
+	h1 {
+		font-style: italic;
+		font-weight: 700;
+		color: var(--g);
+		font-size: clamp(34px, 7vw, 60px);
+		line-height: 1.1;
+		margin: 12px 0;
+	}
+	.lede {
+		max-width: 40rem;
+		margin: 0 auto 12px;
+	}
+	.pkey {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 12px;
+		justify-content: center;
+		margin: 20px 0 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--pc, var(--line));
+		color: var(--pt, var(--ink));
+		padding: 1px 8px;
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 11px;
+		line-height: 1.6;
+		background: var(--paper);
+	}
+	.chip::before {
+		content: "";
+		width: 8px;
+		height: 8px;
+		background: var(--pc);
+		display: inline-block;
+	}
+	.chip.plain::before {
+		display: none;
+	}
+	/* sticky strip */
+	.strip {
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		background: var(--paper);
+		border-bottom: 1px solid var(--line);
+		margin: 28px 0 0;
+		padding: 10px 0 8px;
+		animation: strip-in 1.5s ease both;
+	}
+	@keyframes strip-in {
+		from {
+			opacity: 0;
+			transform: translate3d(0, 100px, 0);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	.bars {
+		position: relative;
+		display: flex;
+		align-items: flex-end;
+		gap: 3px;
+		min-height: 84px;
+	}
+	.wk {
+		flex: 1 1 0;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		align-items: stretch;
+		cursor: pointer;
+		color: inherit;
+		text-decoration: none;
+	}
+	.wk.empty {
+		cursor: default;
+	}
+	.wk .stack {
+		display: flex;
+		flex-direction: column-reverse;
+	}
+	.fold {
+		flex: 0 0 58px;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		text-align: center;
+		color: #94a3b8;
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 9px;
+		line-height: 1.25;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+	.fold .ft {
+		margin-bottom: 6px;
+	}
+	.fold .short {
+		display: none;
+	}
+	.fold .dots {
+		height: 0;
+		margin-top: 1px;
+		border-top: 2px dotted #94a3b8;
+	}
+	.fold.silent {
+		color: var(--sun);
+	}
+	.fold.silent .dots {
+		border-top-color: var(--sun);
+	}
+	.wk.silent .base {
+		background: var(--sun);
+	}
+	.wk .seg {
+		background: var(--pc);
+		height: 12px;
+		flex: none;
+		border-top: 1px solid var(--paper);
+		box-sizing: border-box;
+	}
+	.wk .base {
+		height: 2px;
+		background: var(--line);
+		margin-top: 1px;
+	}
+	.wk .n {
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 10px;
+		text-align: center;
+		color: var(--mute);
+		line-height: 1.2;
+		height: 12px;
+	}
+	.wk:hover .seg {
+		filter: brightness(0.85);
+	}
+	.wlabels {
+		display: flex;
+		gap: 3px;
+		margin-top: 3px;
+	}
+	.wlabels span {
+		flex: 1 1 0;
+		min-width: 0;
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 9px;
+		color: var(--mute);
+		text-align: center;
+		white-space: nowrap;
+	}
+	/* a bracket under each month's weeks shows which bars belong to it */
+	.wlabels span.mg {
+		position: relative;
+		padding-top: 9px;
+		color: var(--g);
+		font-weight: 600;
+	}
+	.wlabels span.mg::before {
+		content: "";
+		position: absolute;
+		top: 0;
+		left: 1px;
+		right: 1px;
+		height: 5px;
+		border: 1.5px solid #94a3b8;
+		border-top: 0;
+	}
+	.wlabels span.fold {
+		flex: 0 0 58px;
+	}
+	.wlabels b {
+		color: var(--ink);
+		font-weight: 700;
+	}
+
+	/* spine list */
+	.spine {
+		position: relative;
+		max-width: 48rem;
+		margin: 40px auto 0;
+	}
+	.spine::before {
+		content: "";
+		position: absolute;
+		left: 12px;
+		top: 12px;
+		bottom: 12px;
+		width: 1px;
+		background: var(--line);
+	}
+	.spine ol {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.spine li {
+		position: relative;
+		padding-left: 48px;
+	}
+	.mchip {
+		margin: 44px 0 24px;
+		scroll-margin-top: 190px;
+	}
+	.mchip:first-child {
+		margin-top: 0;
+	}
+	.mchip::before {
+		content: "";
+		position: absolute;
+		left: 12px;
+		top: 50%;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--g);
+		transform: translate(-50%, -50%);
+		box-shadow: 0 0 0 4px var(--paper);
+	}
+	.mchip span {
+		display: inline-block;
+		background: var(--paper);
+		border: 1px solid rgba(0, 168, 107, 0.4);
+		color: var(--g);
+		padding: 4px 12px;
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 12px;
+	}
+	.entry {
+		margin-bottom: 36px;
+		scroll-margin-top: 190px;
+	}
+	.entry::before {
+		content: "";
+		position: absolute;
+		left: 12px;
+		top: 8px;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--pc);
+		transform: translateX(-50%);
+		box-shadow: 0 0 0 4px var(--paper);
+	}
+	.entry:target {
+		animation: flash 1.6s ease-out;
+	}
+	@keyframes flash {
+		0% {
+			background: rgba(0, 168, 107, 0.18);
+		}
+		100% {
+			background: transparent;
+		}
+	}
+	.entry .meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 12px;
+		color: var(--mute);
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 12px;
+		letter-spacing: 0.05em;
+	}
+	.entry h2 {
+		font-style: italic;
+		font-weight: 700;
+		color: var(--g);
+		font-size: clamp(21px, 3.4vw, 28px);
+		line-height: 1.2;
+		margin: 8px 0 0;
+	}
+	.entry h2 a:hover {
+		text-decoration: underline;
+		text-underline-offset: 4px;
+	}
+	.entry p {
+		margin: 8px 0 0;
+	}
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 12px 0 0;
+		padding: 0;
+		list-style: none;
+	}
+	.tags li {
+		padding: 0 8px;
+		border: 1px solid var(--line);
+		color: var(--mute);
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 12px;
+	}
+
+	/* gap and shipped markers */
+	.gap {
+		margin: 0 0 36px;
+	}
+	.gap::before {
+		content: "";
+		position: absolute;
+		left: 12px;
+		top: 14px;
+		width: 9px;
+		height: 9px;
+		transform: translateX(-50%) rotate(45deg);
+		background: var(--paper);
+		border: 1px solid var(--pc, var(--g));
+	}
+	.gap .box {
+		border: 1px dashed var(--pc, var(--g));
+		padding: 10px 12px;
+		background: repeating-linear-gradient(
+			135deg,
+			transparent 0 7px,
+			rgba(30, 41, 59, 0.04) 7px 8px
+		);
+	}
+	.gap .gl {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 10px;
+		align-items: center;
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 12px;
+	}
+	.range {
+		color: var(--mute);
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		font-size: 12px;
+		margin-top: 4px;
+		letter-spacing: 0.04em;
+	}
+	.gap.lost .box {
+		border: 2px dashed var(--ink);
+		padding: 14px;
+	}
+	.gap.lost .gl b {
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		font-size: 13px;
+	}
+	.quote {
+		font-style: italic;
+		margin: 6px 0 0;
+	}
+	.gap.plain .box {
+		padding: 6px 12px;
+		background: none;
+	}
+	.gap.plain .gl {
+		color: var(--ink);
+		text-transform: none;
+		letter-spacing: 0.02em;
+		font-size: 13px;
+	}
+	.gap.paused .box {
+		border: 3px double var(--sun);
+		padding: 12px 14px;
+		background: linear-gradient(
+			180deg,
+			rgba(138, 109, 26, 0.1),
+			rgba(138, 109, 26, 0) 70%
+		);
+	}
+	.gap.paused .gl b {
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		font-size: 13px;
+		color: var(--sun);
+	}
+	.shipped {
+		margin: 0 0 36px;
+	}
+	.shipped::before {
+		content: "";
+		position: absolute;
+		left: 12px;
+		top: 12px;
+		width: 12px;
+		height: 12px;
+		transform: translateX(-50%);
+		background: var(--ink);
+		box-shadow: 0 0 0 4px var(--paper);
+	}
+	.shipped .box {
+		border: 2px solid var(--ink);
+		padding: 8px 12px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 12px;
+		align-items: center;
+	}
+	.shipped .t {
+		font-family: ui-monospace, Menlo, Consolas, monospace;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		font-size: 12px;
+	}
+
+	.home {
+		margin-top: 72px;
+		display: flex;
+		justify-content: center;
+	}
+	.foot {
+		/* same room below the last bar as the other pages' footers, so it can scroll far enough to fade in */
+		margin: 48px 0 96px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.foot i {
+		display: block;
+		background: var(--g);
+	}
+	.foot i:nth-child(1) {
+		height: 6px;
+	}
+	.foot i:nth-child(2) {
+		height: 12px;
+	}
+	.foot i:nth-child(3) {
+		height: 24px;
+	}
+
+	@media (max-width: 480px) {
+		.wk .seg {
+			height: 9px;
+		}
+		.fold,
+		.wlabels span.fold {
+			flex-basis: 34px;
+			font-size: 8px;
+			letter-spacing: 0;
+		}
+		.fold .long,
+		.wlabels span.tight {
+			visibility: hidden;
+		}
+		.fold .long {
+			display: none;
+		}
+		.fold .short {
+			display: block;
+		}
+	}
+</style>

@@ -73,6 +73,8 @@ As the robot drives, it encounters different scenarios marked by lines across th
 <h4>NPC Avoidance</h4>
 <p>
 Of the three NPCs, the pedestrian was the only one that the robot would ever hit. The truck acted as a contour in such a way that the PID automatically avoided it, and Baby Yoda was navigated around entirely.<br />
+</p>
+<p>
 To dodge the pedestrian, the staging system was put to simple use. Upon crossing the red line, the robot swaps to phase 2, and waits for the marker to shift dramatically. As the pedestrian crosses the left side of the road, it would disrupt the contour and cause this shift. The robot would then resume its normal behaviour.
 </p>
 

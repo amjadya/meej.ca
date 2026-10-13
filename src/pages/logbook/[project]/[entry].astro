@@ -4,6 +4,8 @@ import BaseLayout from "../../../layouts/BaseLayout.astro";
 import LogbookHeader from "../../../components/LogbookHeader.astro";
 import HomeButton from "../../../components/HomeButton.astro";
 import { logbooks } from "../../../data/logbooks";
+import { inlineCode, plainText } from "../../../lib/inlineCode";
+import "katex/dist/katex.min.css";
 
 export async function getStaticPaths() {
 	const entries = await getCollection("logbook", (entry) => {
@@ -52,7 +54,7 @@ const isoDate = entry.data.date.toISOString().slice(0, 10);
 
 <BaseLayout
 	title={`${entry.data.title} | ${logbook?.title ?? "Logbook"} | Amjad Yaghi`}
-	description={entry.data.summary}
+	description={plainText(entry.data.summary)}
 >
 	<LogbookHeader />
 
@@ -143,9 +145,10 @@ const isoDate = entry.data.date.toISOString().slice(0, 10);
 			<h1 class="mt-6 text-4xl lg:text-6xl font-bold text-secondary">
 				{entry.data.title}
 			</h1>
-			<p class="my-4 text-slate-800 italic max-w-2xl mx-auto leading-relaxed">
-				{entry.data.summary}
-			</p>
+			<p
+				class="my-4 text-slate-800 italic max-w-2xl mx-auto leading-relaxed"
+				set:html={inlineCode(entry.data.summary)}
+			/>
 			{
 				entry.data.tags && entry.data.tags.length > 0 && (
 					<ul class="flex flex-wrap justify-center gap-2 mt-4" role="list">
@@ -324,3 +327,14 @@ const isoDate = entry.data.date.toISOString().slice(0, 10);
 		</div>
 	</footer>
 </BaseLayout>
+
+<style is:global>
+	.table-scroll {
+		overflow-x: auto;
+		max-width: 100%;
+		margin: 2em 0;
+	}
+	.table-scroll > table {
+		margin: 0;
+	}
+</style>

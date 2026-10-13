@@ -1,0 +1,620 @@
+---
+// replay of one beacon channel switching on and off that fits the text column, driven by the ngspice run in src/data/sims
+import SymbolDefs from "../cards/SymbolDefs.astro";
+import sim from "../../data/sims/beacon-settle.json";
+
+const tEnd = sim.t0 + (sim.iled.length - 1) * sim.dt;
+const X0 = 44;
+const X1 = 428;
+const X = (t: number) => X0 + ((t - sim.t0) / (tEnd - sim.t0)) * (X1 - X0);
+const H = 44;
+const panels = [
+	{ key: "iled", label: "LED current (mA)", max: 110, ticks: [0, 100], top: 40, cls: "tr-g" },
+	{ key: "vgate", label: "Q1 gate voltage (V)", max: 5.5, ticks: [0, 5], top: 110, cls: "tr-k" },
+	{ key: "vdrain", label: "Q1 drain voltage (V)", max: 27, ticks: [0, 20], top: 180, cls: "tr-k" },
+	{ key: "iq2", label: "Q2 current (mA)", max: 1.4, ticks: [0, 1], top: 250, cls: "tr-k" },
+];
+const bottom = 250 + H;
+const Y = (v: number, p: (typeof panels)[number]) => p.top + H - (v / p.max) * H;
+const trace = (p: (typeof panels)[number]) => {
+	const ys = (sim as unknown as Record<string, number[]>)[p.key];
+	return "M" + ys.map((v, k) => `${X(sim.t0 + k * sim.dt).toFixed(1)} ${Y(v, p).toFixed(1)}`).join(" L");
+};
+
+const intro = "The pin is low, so Q1 is closed and nothing flows. Press play, or step through the six stages.";
+const moments = [
+	{ t: sim.moments.charge, html: "The pin goes high and starts charging Q1's gate through R<sub>G</sub>." },
+	{
+		t: sim.moments.plateau,
+		html: "Q1 starts to open and pulls the drain down. While the drain falls, the pin's 2 mA flows on through Q1's gate-to-drain capacitance, leaving nothing to raise the gate, so it holds near 3 V. This flat step is called the Miller plateau.",
+	},
+	{ t: sim.moments.lit, html: "The drain has fallen far enough for the LEDs to switch on, and their current climbs." },
+	{
+		t: sim.moments.q2,
+		html: "R<sub>S</sub> reaches about 0.6 V. Q2 turns on and holds the gate, so the current levels off near 98 mA.",
+	},
+	{ t: sim.moments.off, html: "The pin goes low, and the gate drains back out through R<sub>G</sub>, closing Q1." },
+	{ t: sim.moments.dark, html: "Q1 has closed and the LEDs are dark. The gate keeps draining toward 0 V." },
+];
+---
+
+<figure class="bv not-prose" data-bv>
+	<SymbolDefs />
+
+	<div class="top">
+		<div class="left">
+			<svg class="circuit" viewBox="0 0 452 384" role="img" aria-label="The beacon channel schematic, with the live pin, gate, drain, Q2 and LED values written beside each part. Moving dashes show current in the LED path, from the pin through R_G, through Q2, and into Q1's gate.">
+				{[60, 132].map((y) => <circle class="halo" cx="330" cy={y} r="16" data-halo />)}
+
+				<path class="glow" d="M330 24V360H280" data-glow="led" />
+				<path class="glow" d="M27.6 220H230" data-glow="rg" />
+				<path class="glow" d="M230 220V360H280" data-glow="q2" />
+				<path class="glow" d="M230 220H302" data-glow="ig" />
+
+				<text class="t b" x="330" y="16" text-anchor="middle">+24 V</text>
+				<path class="w" d="M312 24H348M330 24V40M330 80V84M330 108V112M330 152V190"></path>
+				<rect class="dash" x="298" y="32" width="150" height="128" rx="8"></rect>
+				<use href="#led-d" x="330" y="40"></use>
+				<path class="dots" d="M330 86V106"></path>
+				<use href="#led-d" x="330" y="112"></use>
+				<text class="t" x="356" y="64">LED1</text>
+				<text class="s" x="340" y="101">LED2 to LED11</text>
+				<text class="t" x="356" y="136">LED12</text>
+				<text class="s" x="288" y="50" text-anchor="end">LED current</text>
+				<text class="v g big" x="288" y="74" text-anchor="end" data-out="iled">0.0 mA</text>
+				<text class="s" x="288" y="140" text-anchor="end">hoop around each</text>
+				<text class="s" x="288" y="155" text-anchor="end">of the landing gears</text>
+
+				<text class="s" x="342" y="182">drain</text>
+				<text class="v" x="382" y="182" data-out="vdrain">0.0 V</text>
+
+				<use href="#nmos" x="302" y="220"></use>
+				<text class="t b" x="346" y="218">Q1</text>
+				<text class="s" x="346" y="234">IRFZ44</text>
+
+				<path class="w" d="M330 250V280M330 340V360"></path>
+				<use href="#res-v" x="330" y="280"></use>
+				<text class="t b" x="346" y="308">R<tspan class="sub" dy="4">S</tspan></text>
+				<text class="s" x="346" y="328">6.8 Ω</text>
+
+				<use href="#term" x="24" y="220"></use>
+				<text class="t b" x="12" y="202">tone pin</text>
+				<text class="v" x="24" y="248" text-anchor="middle" data-out="pin">0 V</text>
+				<path class="w" d="M27.6 220H60M120 220H302"></path>
+				<use href="#res-h" x="60" y="220"></use>
+				<text class="t b" x="90" y="204" text-anchor="middle">R<tspan class="sub" dy="4">G</tspan></text>
+				<text class="s" x="90" y="244" text-anchor="middle">1 kΩ</text>
+
+				<text class="s" x="164" y="208">gate</text>
+				<text class="v" x="198" y="208" data-out="vgate">0.00 V</text>
+
+				<path class="w" d="M128 220V250M128 310V360"></path>
+				<use href="#res-v" x="128" y="250"></use>
+				<text class="t b" x="116" y="278" text-anchor="end">R<tspan class="sub" dy="4">OFF</tspan></text>
+				<text class="s" x="116" y="298" text-anchor="end">100 kΩ</text>
+
+				<path class="w" d="M230 220V250M230 310V360M258 280H330"></path>
+				<use href="#npn" transform="translate(258 280) scale(-1 1)"></use>
+				<text class="t b" x="212" y="276" text-anchor="end">Q2</text>
+				<text class="s" x="212" y="292" text-anchor="end">2N3904</text>
+				<text class="v" x="212" y="312" text-anchor="end" data-out="iq2">0.00 mA</text>
+
+				<path class="w" d="M128 360H330"></path>
+				<use href="#gnd" x="280" y="360"></use>
+				<use href="#dot" x="128" y="220"></use>
+				<use href="#dot" x="230" y="220"></use>
+				<use href="#dot" x="330" y="280"></use>
+				<use href="#dot" x="230" y="360"></use>
+				<use href="#dot" x="280" y="360"></use>
+
+				<path class="march" d="M330 24V360H280" data-march="led" />
+				<path class="march" d="M27.6 220H230" data-march="rg" />
+				<path class="march" d="M230 220V360H280" data-march="q2" />
+				<path class="march" d="M230 220H302" data-march="ig" />
+			</svg>
+			<p class="dashnote">
+				*The gate-side currents are about 50 times smaller, so their dashes are sped up 50 times.
+			</p>
+		</div>
+
+		<div class="right">
+			<div class="bar">
+				<button type="button" class="play" data-play>Play</button>
+				<input type="range" min="0" max="1000" value="0" aria-label="Time" data-scrub />
+				<span class="clock" data-out="t">0.00 µs</span>
+			</div>
+			<div class="steps">
+				<button type="button" class="nav" data-prev aria-label="Previous stage">‹</button>
+				{
+					moments.map((m, k) => (
+						<button type="button" class="dot" data-step={k} aria-label={`Stage ${k + 1}, ${m.t.toFixed(1)} µs`}>
+							{k + 1}
+						</button>
+					))
+				}
+				<button type="button" class="nav" data-next aria-label="Next stage">›</button>
+			</div>
+			<div class="texts" aria-live="polite">
+				<p data-text="-1" class="on">
+					<span class="head">Before the pin goes high</span>
+					{intro}
+				</p>
+				{
+					moments.map((m, k) => (
+						<p data-text={k}>
+							<span class="head">
+								Stage {k + 1} of {moments.length} · {m.t.toFixed(1)} µs
+							</span>
+							<Fragment set:html={m.html} />
+						</p>
+					))
+				}
+			</div>
+		</div>
+	</div>
+
+	<svg class="plots" viewBox={`0 0 440 ${bottom + 44}`} role="img" aria-label="Four plots against time, drawn as the replay runs: LED current, Q1's gate voltage, Q1's drain voltage and Q2's current, with the start of each of the six stages marked.">
+		<defs>
+			<clipPath id="bv-reveal"><rect x="0" y="0" width={X0} height={bottom + 44} data-reveal /></clipPath>
+		</defs>
+		{
+			panels.map((p) => (
+				<g>
+					{p.ticks.map((v) => (
+						<>
+							<path class="grid" d={`M${X0} ${Y(v, p)}H${X1}`} />
+							<text class="s" x={X0 - 6} y={Y(v, p) + 4} text-anchor="end">
+								{v}
+							</text>
+						</>
+					))}
+					<path class="thin" d={`M${X0} ${p.top}V${p.top + H}H${X1}`} />
+					<text class="s b ink" x={X1} y={p.top - 8} text-anchor="end">
+						{p.label}
+					</text>
+					<path class="faint" d={trace(p)} />
+					<path class={p.cls} d={trace(p)} clip-path="url(#bv-reveal)" />
+				</g>
+			))
+		}
+		{
+			moments.map((m, k) => (
+				<g class="mark" data-mark={k}>
+					<path d={`M${X(m.t).toFixed(1)} 28V${bottom}`} />
+					<circle cx={X(m.t).toFixed(1)} cy="16" r="9" />
+					<text x={X(m.t).toFixed(1)} y="20" text-anchor="middle">
+						{k + 1}
+					</text>
+				</g>
+			))
+		}
+		{[0, 5, 10, 15, 20, 25].map((v) => (
+			<text class="s" x={X(v)} y={bottom + 18} text-anchor="middle">{v}</text>
+		))}
+		<text class="s ink" x={(X0 + X1) / 2} y={bottom + 38} text-anchor="middle">time after the pin goes high (µs)</text>
+		<path class="cursor" d={`M${X0} 28V${bottom}`} data-cursor />
+	</svg>
+
+	<p class="foot">
+		Replayed about 500,000 times slower than real life. Our fastest beacon (1340 Hz) holds the pin high for about
+		373 µs. Here we're only holding it for {sim.tOff} µs just to show the shape better.
+	</p>
+</figure>
+
+<script define:vars={{ sim, X0, X1, bottom }}>
+	const root = document.querySelector("[data-bv]");
+	const n = sim.iled.length;
+	const tEnd = sim.t0 + (n - 1) * sim.dt;
+	const span = tEnd - sim.t0;
+	const playSeconds = 14;
+	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+	const out = {};
+	root.querySelectorAll("[data-out]").forEach((el) => (out[el.dataset.out] = el));
+	const glow = {};
+	root.querySelectorAll("[data-glow]").forEach((el) => (glow[el.dataset.glow] = el));
+	const march = {};
+	root.querySelectorAll("[data-march]").forEach((el) => (march[el.dataset.march] = el));
+	const halos = root.querySelectorAll("[data-halo]");
+	const marks = [...root.querySelectorAll("[data-mark]")];
+	const dots = [...root.querySelectorAll("[data-step]")];
+	const texts = [...root.querySelectorAll("[data-text]")];
+	const times = [sim.moments.charge, sim.moments.plateau, sim.moments.lit, sim.moments.q2, sim.moments.off, sim.moments.dark];
+	const reveal = root.querySelector("[data-reveal]");
+	const cursor = root.querySelector("[data-cursor]");
+	const playBtn = root.querySelector("[data-play]");
+	const scrub = root.querySelector("[data-scrub]");
+
+	let t = sim.t0;
+	let playing = false;
+	let hold = 0;
+	let shown = null;
+	const offset = { led: 0, rg: 0, q2: 0, ig: 0 };
+
+	// linear interpolation into the evenly spaced simulation samples
+	const at = (arr, time) => {
+		const f = Math.min(Math.max((time - sim.t0) / sim.dt, 0), n - 1);
+		const k = Math.floor(f);
+		const r = f - k;
+		return k + 1 < n ? arr[k] * (1 - r) + arr[k + 1] * r : arr[k];
+	};
+
+	function values(time) {
+		const pin = time >= 0 && time < sim.tOff ? 5 : 0;
+		const vg = at(sim.vgate, time);
+		const iq2 = Math.max(at(sim.iq2, time), 0);
+		const irg = (pin - vg) / 1.025;
+		return {
+			pin,
+			vg,
+			iq2,
+			irg,
+			ig: irg - iq2 - vg / 100,
+			iled: Math.max(at(sim.iled, time), 0),
+			vd: at(sim.vdrain, time),
+		};
+	}
+
+	const stepAt = (time) => {
+		let now = -1;
+		times.forEach((m, k) => {
+			if (time >= m - 1e-6) now = k;
+		});
+		return now;
+	};
+
+	function draw(dtReal) {
+		const v = values(t);
+		out.t.textContent = `${t.toFixed(2)} µs`;
+		out.pin.textContent = `${v.pin} V`;
+		out.pin.classList.toggle("g", v.pin > 0);
+		out.vgate.textContent = `${v.vg.toFixed(2)} V`;
+		out.vdrain.textContent = `${v.vd.toFixed(1)} V`;
+		out.iq2.textContent = `${v.iq2.toFixed(2)} mA`;
+		out.iled.textContent = `${v.iled.toFixed(1)} mA`;
+
+		// signed currents, so current leaving the gate runs the gate-side dashes backwards
+		const flows = { led: v.iled, rg: v.irg * 50, q2: v.iq2 * 50, ig: v.ig * 50 };
+		for (const key in flows) {
+			const level = Math.min(Math.abs(flows[key]) / 100, 1);
+			glow[key].style.strokeOpacity = (0.26 * level).toFixed(3);
+			march[key].style.opacity = level > 0.01 ? "1" : "0";
+			offset[key] -= flows[key] * 0.45 * dtReal;
+			march[key].style.strokeDashoffset = offset[key].toFixed(2);
+		}
+		halos.forEach((h) => (h.style.opacity = (0.35 * Math.min(v.iled / 100, 1)).toFixed(3)));
+
+		const now = stepAt(t);
+		if (now !== shown) {
+			shown = now;
+			marks.forEach((m, k) => m.classList.toggle("on", k === now));
+			dots.forEach((d, k) => {
+				d.classList.toggle("on", k === now);
+				d.classList.toggle("past", k < now);
+			});
+			texts.forEach((p) => p.classList.toggle("on", Number(p.dataset.text) === now));
+		}
+
+		const x = X0 + ((t - sim.t0) / span) * (X1 - X0);
+		reveal.setAttribute("width", x.toFixed(1));
+		cursor.setAttribute("d", `M${x.toFixed(1)} 28V${bottom}`);
+		scrub.value = String(Math.round(((t - sim.t0) / span) * 1000));
+	}
+
+	let last = performance.now();
+	function frame(stamp) {
+		const dtReal = Math.min((stamp - last) / 1000, 0.1);
+		last = stamp;
+		if (playing) {
+			if (t >= tEnd) {
+				hold += dtReal;
+				if (hold > 2.5) {
+					t = sim.t0;
+					hold = 0;
+				}
+			} else {
+				t = Math.min(t + (span / playSeconds) * dtReal, tEnd);
+			}
+		}
+		draw(dtReal);
+		requestAnimationFrame(frame);
+	}
+
+	function setPlaying(on) {
+		playing = on;
+		playBtn.textContent = on ? "Pause" : "Play";
+	}
+
+	// jumps just past the start of a stage so its text and marker light up
+	function goTo(k) {
+		setPlaying(false);
+		t = k < 0 ? sim.t0 : times[k] + 0.05;
+	}
+
+	playBtn.addEventListener("click", () => {
+		if (!playing && t >= tEnd) t = sim.t0;
+		setPlaying(!playing);
+	});
+	root.querySelector("[data-prev]").addEventListener("click", () => goTo(Math.max(stepAt(t) - 1, -1)));
+	root.querySelector("[data-next]").addEventListener("click", () => goTo(Math.min(stepAt(t) + 1, times.length - 1)));
+	dots.forEach((d) => d.addEventListener("click", () => goTo(Number(d.dataset.step))));
+	scrub.addEventListener("input", () => {
+		setPlaying(false);
+		t = sim.t0 + (Number(scrub.value) / 1000) * span;
+	});
+
+	if (reduce) {
+		t = sim.moments.q2 + 2;
+	} else {
+		// starts the replay the first time the figure scrolls into view
+		const io = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((e) => e.isIntersecting)) {
+					setPlaying(true);
+					io.disconnect();
+				}
+			},
+			{ threshold: 0.3 },
+		);
+		io.observe(root);
+	}
+	requestAnimationFrame(frame);
+</script>
+
+<style is:global>
+	.bv {
+		--g: #00a86b;
+		margin: 2rem 0 1rem;
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 16px;
+	}
+	.bv svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		margin: 0 auto;
+	}
+	.bv .circuit {
+		max-width: 470px;
+	}
+	.bv .plots {
+		max-width: 560px;
+		margin-top: 20px;
+	}
+	.bv .right {
+		margin-top: 18px;
+		padding-top: 14px;
+		border-top: 1px dashed rgba(0, 168, 107, 0.3);
+	}
+	.bv svg use {
+		color: #1e293b;
+	}
+	.bv svg .w {
+		stroke: #1e293b;
+		stroke-width: 2;
+		fill: none;
+	}
+	.bv svg .t {
+		font: 15px "Work Sans", sans-serif;
+		fill: #1e293b;
+	}
+	.bv svg .s {
+		font: 12.5px "Work Sans", sans-serif;
+		fill: #64748b;
+	}
+	.bv svg .s.ink {
+		fill: #1e293b;
+	}
+	.bv svg .v {
+		font: 600 14px ui-monospace, Menlo, Consolas, monospace;
+		fill: #1e293b;
+	}
+	.bv svg .v.big {
+		font-size: 19px;
+	}
+	.bv svg .v.g {
+		fill: var(--g);
+	}
+	.bv svg .b {
+		font-weight: 650;
+	}
+	.bv svg .sub {
+		font-size: 0.75em;
+	}
+	.bv svg .dash {
+		stroke: #94a3b8;
+		stroke-width: 1.3;
+		stroke-dasharray: 6 5;
+		fill: none;
+	}
+	.bv svg .dots {
+		stroke: #64748b;
+		stroke-width: 2;
+		stroke-dasharray: 2 5;
+		fill: none;
+	}
+	.bv svg .halo {
+		fill: #b91c1c;
+		opacity: 0;
+	}
+	.bv svg .glow {
+		stroke: var(--g);
+		stroke-opacity: 0;
+		stroke-width: 12;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		fill: none;
+	}
+	.bv svg .march {
+		stroke: var(--g);
+		stroke-width: 3;
+		stroke-dasharray: 7 9;
+		fill: none;
+		opacity: 0;
+	}
+	.bv svg .grid {
+		stroke: #e2e8f0;
+		stroke-width: 1;
+	}
+	.bv svg .thin {
+		stroke: #64748b;
+		stroke-width: 1.3;
+		fill: none;
+	}
+	.bv svg .faint {
+		stroke: #cbd5e1;
+		stroke-width: 2;
+		fill: none;
+	}
+	.bv svg .tr-g {
+		stroke: var(--g);
+		stroke-width: 2.5;
+		fill: none;
+	}
+	.bv svg .tr-k {
+		stroke: #1e293b;
+		stroke-width: 2.5;
+		fill: none;
+	}
+	.bv svg .cursor {
+		stroke: var(--g);
+		stroke-width: 1.5;
+	}
+	.bv svg .mark path {
+		stroke: #94a3b8;
+		stroke-width: 1;
+		stroke-dasharray: 3 4;
+	}
+	.bv svg .mark circle {
+		fill: #fff;
+		stroke: #94a3b8;
+		stroke-width: 1.2;
+	}
+	.bv svg .mark text {
+		font: 600 11px ui-monospace, Menlo, Consolas, monospace;
+		fill: #64748b;
+	}
+	.bv svg .mark.on path {
+		stroke: var(--g);
+	}
+	.bv svg .mark.on circle {
+		fill: var(--g);
+		stroke: var(--g);
+	}
+	.bv svg .mark.on text {
+		fill: #fff;
+	}
+	.bv .dashnote,
+	.bv .foot {
+		margin: 8px 0 0;
+		font-size: 13px;
+		line-height: 1.5;
+		color: #64748b;
+		text-align: center;
+	}
+	.bv .bar {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.bv button {
+		font: 600 13px ui-monospace, Menlo, Consolas, monospace;
+		height: 30px;
+		min-width: 30px;
+		padding: 0;
+		border: 1px solid #cbd5e1;
+		background: #fafafa;
+		color: #475569;
+		cursor: pointer;
+	}
+	.bv .play {
+		flex: 0 0 auto;
+		min-width: 72px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		background: var(--g);
+		border-color: var(--g);
+		color: #fff;
+	}
+	.bv .bar input {
+		flex: 1 1 auto;
+		min-width: 0;
+		accent-color: var(--g);
+	}
+	.bv .bar .clock {
+		flex: 0 0 auto;
+		min-width: 76px;
+		text-align: right;
+		font: 600 14px ui-monospace, Menlo, Consolas, monospace;
+		color: #1e293b;
+	}
+	.bv .steps {
+		display: flex;
+		justify-content: center;
+		gap: 5px;
+		margin-top: 12px;
+	}
+	.bv .steps .nav {
+		font-size: 18px;
+	}
+	.bv .steps .dot {
+		border-radius: 50%;
+	}
+	.bv .steps .dot.past {
+		border-color: var(--g);
+		color: var(--g);
+	}
+	.bv .steps .dot.on {
+		background: var(--g);
+		border-color: var(--g);
+		color: #fff;
+	}
+	.bv .texts {
+		display: grid;
+		margin-top: 12px;
+		padding: 12px 14px;
+		border-left: 3px solid var(--g);
+		background: rgba(0, 168, 107, 0.06);
+	}
+	.bv .texts p {
+		grid-area: 1 / 1;
+		margin: 0;
+		font-size: 17px;
+		line-height: 1.55;
+		color: #1e293b;
+		visibility: hidden;
+	}
+	.bv .texts p.on {
+		visibility: visible;
+	}
+	.bv .texts .head {
+		display: block;
+		margin-bottom: 4px;
+		font: 600 13px ui-monospace, Menlo, Consolas, monospace;
+		letter-spacing: 0.02em;
+		color: var(--g);
+	}
+	/* on a phone the figure runs to the screen edges so the circuit text stays legible */
+	@media (max-width: 560px) {
+		.bv {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 14px 8px;
+		}
+		.bv .right {
+			padding: 0 8px;
+		}
+		.bv .texts p {
+			font-size: 16px;
+		}
+		.bv svg .s {
+			font-size: 13.5px;
+		}
+		.bv svg .v {
+			font-size: 15px;
+		}
+	}
+</style>

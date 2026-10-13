@@ -1,0 +1,57 @@
+---
+title: Year 1, where we ended up
+date: 2026-04-12
+summary: >
+  The vision and prediction pipeline is the year's primary achievement.
+  Detection is unsolved, the motors came late, and the HTC Vive did not work
+  out.
+tags: [report]
+draft: false
+---
+
+## What worked
+
+The vision and prediction pipeline is the year's primary achievement. The
+stereo camera system triangulates birdie position in real time, and an
+Extended Kalman Filter fused with a physics-based aerodynamics model predicts
+landing position and time-to-arrival.
+
+Mechanically, the robot is complete, both in design and fabrication, except
+for the motors. Electrically, the power system is mostly finished and is
+awaiting motors to begin integration testing. The signal system is still
+under development.
+
+## What did not
+
+Motor lead times prevented full assembly, so the Year 1 goal of catching a
+flying birdie was not met. The primary constraint of Year 1 was motor lead
+time, preventing the physical robot from being assembled and tested.
+
+Birdie detection under gym lighting remains unsolved and is the highest-risk
+item for Year 2. HSV thresholding requires sufficient colour information to
+work, but the short exposures needed to avoid motion blur at high frame rates
+produce images too dark for reliable thresholding. There is a narrow
+operating window where exposure is high enough for detection but short enough
+to avoid blur, and we were unable to find it reliably. Whether background
+subtraction can close this gap is unproven.
+
+Robot localization remains an unmanaged risk. Since our stereo vision system is reliable, we decided to pivot to a stereo vision approach, using ArUco markers on the robot. This simplifies the
+localization setup, as the birdie tracking system and the robot localization
+system can share the same stereo vision hardware and a common coordinate
+system.
+
+## Next
+
+The end goal of a fully autonomous robot remains achievable, but is
+contingent on resolving birdie detection and robot localization. The team
+recommends prioritizing background subtraction as an alternative to HSV
+detection before any further integration work. Across all three subsystems,
+the core theory is well-developed and individual components are progressing.
+The path to a functional system in Year 2 is clear.
+
+Over the next year, rapid development is required for robot motion and
+control system development in order for the robot to reach the required
+locations to strike the birdie. One key challenge, along with subsystem
+optimization, is integrating each subsystem in a manner which fits the time
+budget for hitting the birdie. Timing and telemetry will be key
+considerations for Year 2.

@@ -1,0 +1,76 @@
+---
+import { Image } from "astro:assets";
+import type { EntryImage } from "../lib/entryImages";
+
+interface Props {
+	images: EntryImage[];
+}
+
+const { images } = Astro.props;
+---
+
+{
+	images.length > 0 && (
+		<ul class="thumbs" role="list">
+			{images.map((im) => (
+				<li>
+					<Image src={im.src} width={420} alt={im.alt} loading="lazy" />
+				</li>
+			))}
+		</ul>
+	)
+}
+
+<script>
+	// each entry's thumbnails fade from ghost to sharp as the entry rises through the lower third of the screen
+	// at the very bottom of the page everything on screen is forced sharp so the last entries are never stuck faded
+	const els = [...document.querySelectorAll<HTMLElement>(".thumbs")];
+	if (els.length) {
+		const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+		const update = () => {
+			const H = innerHeight;
+			const atBottom = scrollY + H >= document.documentElement.scrollHeight - 4;
+			els.forEach((el) => {
+				const top = (el.closest("li.entry-item") ?? el).getBoundingClientRect().top;
+				let t = Math.min(1, Math.max(0, (H * 0.94 - top) / (H * 0.34)));
+				if (still || (atBottom && top < H)) t = 1;
+				el.style.setProperty("--t", t.toFixed(3));
+			});
+		};
+		addEventListener("scroll", update, { passive: true });
+		addEventListener("resize", update);
+		update();
+	}
+</script>
+
+<style is:global>
+	.thumbs {
+		--t: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 14px 0 0;
+		padding: 0;
+		list-style: none;
+		opacity: calc(0.18 + 0.82 * var(--t));
+		filter: grayscale(calc(1 - var(--t)));
+		transform: translateY(calc((1 - var(--t)) * 18px));
+		transition:
+			opacity 0.12s linear,
+			filter 0.12s linear,
+			transform 0.12s linear;
+	}
+	.thumbs li {
+		width: calc(33.333% - 6px);
+		min-width: 0;
+		margin: 0;
+	}
+	.thumbs img {
+		display: block;
+		width: 100%;
+		aspect-ratio: 4 / 3;
+		object-fit: cover;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		background: #e5e7eb;
+	}
+</style>
