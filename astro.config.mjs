@@ -29,5 +29,7 @@ export default defineConfig({
 	compressHTML: true,
 	integrations: [mdx(), sitemap()],
 	markdown: { remarkPlugins: [remarkMath], rehypePlugins: [rehypeKatex, wrapTables] },
+	// astro rewrites these schemas on every dev start, and the watcher event made it skip the content sync
+	vite: { server: { watch: { ignored: ["**/.astro/collections/**"] } } },
 });
 
