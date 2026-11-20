@@ -1,0 +1,89 @@
+---
+// the court frame drawn at its origin, the robot-side corner on the robot's right when facing the net:
+// x left across the court, y up, z toward the net (config/ekf.yaml). side views look along x, which points
+// into the page; top views look down y, which points out of the page.
+interface Props {
+	x: number;
+	y: number;
+	view: "side" | "top";
+	len?: number;
+}
+const { x, y, view, len = 38 } = Astro.props;
+const head = (x1: number, y1: number, dx: number, dy: number) =>
+	`${x1},${y1} ${x1 - 9 * dx - 4 * dy},${y1 - 9 * dy + 4 * dx} ${x1 - 9 * dx + 4 * dy},${y1 - 9 * dy - 4 * dx}`;
+---
+
+<g class="cax">
+	<line x1={x} y1={y} x2={x + len - 6} y2={y} class="z"></line>
+	<polygon points={head(x + len, y, 1, 0)} class="zh"></polygon>
+	<text x={x + len + 5} y={y + 5} class="ax zt">Z</text>
+	{view === "side" ? (
+		<>
+			<line x1={x} y1={y} x2={x} y2={y - len + 6} class="y"></line>
+			<polygon points={head(x, y - len, 0, -1)} class="yh"></polygon>
+			<text x={x - 5} y={y - len - 6} class="ax yt" text-anchor="middle">Y</text>
+			<circle cx={x} cy={y} r="7" class="xc"></circle>
+			<path d={`M${x - 4.5} ${y - 4.5}L${x + 4.5} ${y + 4.5}M${x + 4.5} ${y - 4.5}L${x - 4.5} ${y + 4.5}`} class="x"></path>
+			<text x={x - 12} y={y - 9} class="ax xt" text-anchor="end">X</text>
+		</>
+	) : (
+		<>
+			<line x1={x} y1={y} x2={x} y2={y - len + 6} class="xl"></line>
+			<polygon points={head(x, y - len, 0, -1)} class="xh"></polygon>
+			<text x={x - 5} y={y - len - 6} class="ax xt" text-anchor="middle">X</text>
+			<circle cx={x} cy={y} r="7" class="yc"></circle>
+			<circle cx={x} cy={y} r="2.2" class="yd"></circle>
+			<text x={x - 12} y={y + 18} class="ax yt" text-anchor="end">Y</text>
+		</>
+	)}
+</g>
+
+<style is:global>
+	.cax .z,
+	.cax .y,
+	.cax .xl,
+	.cax .x {
+		stroke-width: 3;
+		stroke-linecap: round;
+		fill: none;
+	}
+	.cax .z {
+		stroke: #2563eb;
+	}
+	.cax .zh,
+	.cax .zt {
+		fill: #2563eb;
+	}
+	.cax .y {
+		stroke: #16a34a;
+	}
+	.cax .yh,
+	.cax .yt,
+	.cax .yd {
+		fill: #16a34a;
+	}
+	.cax .yc {
+		fill: #fff;
+		stroke: #16a34a;
+		stroke-width: 2;
+	}
+	.cax .xl,
+	.cax .x {
+		stroke: #dc2626;
+	}
+	.cax .x {
+		stroke-width: 2;
+	}
+	.cax .xh,
+	.cax .xt {
+		fill: #dc2626;
+	}
+	.cax .xc {
+		fill: #fff;
+		stroke: #dc2626;
+		stroke-width: 2;
+	}
+	.cax .ax {
+		font: 700 15px "Work Sans", sans-serif;
+	}
+</style>

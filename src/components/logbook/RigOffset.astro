@@ -1,0 +1,197 @@
+---
+// where camera 2 sits relative to camera 1, a baseline b away. show="lambda": top view (z toward the net to the
+// right, x up), camera 2 swung along the floor by lambda from side by side (+x). show="epsilon": seen from behind the
+// rig looking toward the net (x to the left, y up), camera 2 lifted by epsilon from level, drawn at lambda = 0.
+// example angles: lambda 40 degrees, epsilon 35 degrees.
+interface Props {
+	show: "lambda" | "epsilon";
+}
+const { show } = Astro.props;
+const W = 680;
+const H = show === "lambda" ? 330 : 350;
+const cx = 300;
+const cy = show === "lambda" ? 175 : 190;
+const R = 120;
+const f = (n: number) => n.toFixed(1);
+const deg = Math.PI / 180;
+// screen direction of camera 2 at angle a: lambda turns from +x (screen up) toward +z (screen right);
+// epsilon lifts from +x (screen left, seen from behind) toward +y (screen up)
+const pos = (a: number): [number, number] =>
+	show === "lambda" ? [cx + R * Math.sin(a * deg), cy - R * Math.cos(a * deg)] : [cx - R * Math.cos(a * deg), cy - R * Math.sin(a * deg)];
+const A = show === "lambda" ? 40 : 35;
+const ghosts: [number, string, string][] = show === "lambda"
+	? [[0, "λ = 0: side by side", "middle"], [90, "λ = 90°: in front", "start"], [-90, "λ = −90°: behind", "end"]]
+	: [[0, "ε = 0: level", "end"], [90, "ε = 90°: stacked above", "middle"], [-90, "ε = −90°: stacked below", "middle"]];
+const N = 30;
+const arcR = 52;
+const arc = Array.from({ length: N + 1 }, (_, i) => {
+	const a = ((A * i) / N) * deg;
+	const [x, y] = show === "lambda" ? [cx + arcR * Math.sin(a), cy - arcR * Math.cos(a)] : [cx - arcR * Math.cos(a), cy - arcR * Math.sin(a)];
+	return `${i ? "L" : "M"}${f(x)} ${f(y)}`;
+}).join("");
+const mid = ((A / 2) * deg);
+const lab = show === "lambda" ? [cx + (arcR + 18) * Math.sin(mid), cy - (arcR + 18) * Math.cos(mid)] : [cx - (arcR + 18) * Math.cos(mid), cy - (arcR + 18) * Math.sin(mid)];
+const [p2x, p2y] = pos(A);
+// both angles run -90 to 90, so camera 2 only ever sits on a half circle around camera 1
+const circle = show === "lambda" ? `M${cx - R} ${cy}A${R} ${R} 0 0 1 ${cx + R} ${cy}` : `M${cx} ${cy + R}A${R} ${R} 0 0 1 ${cx} ${cy - R}`;
+const ref = pos(0);
+---
+
+<div class="rgo not-prose">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={show === "lambda"
+		? "Top view of the two cameras. Camera 2 sits a baseline B from camera 1 and swings around it along the floor by lambda: 0 is side by side across the court, 90 degrees is in front toward the net, minus 90 degrees is behind."
+		: "The two cameras seen from behind, looking toward the net. Camera 2 sits a baseline B from camera 1 and is lifted by epsilon: 0 is level, 90 degrees is stacked directly above."}>
+		<rect x="0" y="0" width={W} height={H} class="panel"></rect>
+		<text x="16" y="26" class="ttl">{show === "lambda" ? "top view" : "from behind the rig, looking towards the net"}</text>
+		<path d={circle} class="orbit"></path>
+		{ghosts.map(([a, t, anc]) => {
+			const [x, y] = pos(a);
+			const dx = anc === "start" ? 16 : anc === "end" ? -16 : 0;
+			const dy = anc === "middle" ? (a < 0 ? 26 : -16) : show === "epsilon" ? -12 : 5;
+			return (
+				<g>
+					<circle cx={x} cy={y} r="7" class="ghost"></circle>
+					<text x={x + dx} y={y + dy} class="sm" text-anchor={anc}>{t}</text>
+				</g>
+			);
+		})}
+		<line x1={cx} y1={cy} x2={ref[0]} y2={ref[1]} class="refl"></line>
+		<line x1={cx} y1={cy} x2={p2x} y2={p2y} class="base"></line>
+		<text x={(cx + p2x) / 2 + (show === "lambda" ? 12 : 4)} y={(cy + p2y) / 2 + (show === "lambda" ? 4 : -10)} class="key">B</text>
+		<path d={arc} class="arc"></path>
+		<text x={lab[0]} y={lab[1] + 6} class="ang" text-anchor="middle">{show === "lambda" ? "λ" : "ε"}</text>
+		<circle cx={cx} cy={cy} r="9" class="c1"></circle>
+		<text x={cx + (show === "lambda" ? -14 : 14)} y={cy + 24} class="cl1" text-anchor="middle">1</text>
+		<circle cx={p2x} cy={p2y} r="9" class="c2"></circle>
+		<text x={p2x + 16} y={p2y - 8} class="cl2" text-anchor="start">2</text>
+		{show === "lambda" ? (
+			<g>
+				<line x1="470" y1="300" x2="600" y2="300" class="dir"></line>
+				<polygon points="610,300 598,294 598,306" class="dirh"></polygon>
+				<text x="540" y="290" class="sm" text-anchor="middle">towards the net (+Z)</text>
+				<line x1="40" y1="300" x2="40" y2="230" class="dir"></line>
+				<polygon points="40,220 34,232 46,232" class="dirh"></polygon>
+				<text x="52" y="236" class="sm">+X</text>
+			</g>
+		) : (
+			<g>
+				<line x1="60" y1={cy} x2="620" y2={cy} class="floor"></line>
+				<line x1="620" y1="325" x2="620" y2="255" class="dir"></line>
+				<polygon points="620,245 614,257 626,257" class="dirh"></polygon>
+				<text x="608" y="261" class="sm" text-anchor="end">+Y</text>
+				<line x1="160" y1="325" x2="80" y2="325" class="dir"></line>
+				<polygon points="70,325 82,319 82,331" class="dirh"></polygon>
+				<text x="120" y="315" class="sm" text-anchor="middle">+X</text>
+			</g>
+		)}
+	</svg>
+</div>
+
+<style is:global>
+	.rgo {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.rgo svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+	.rgo text {
+		font-family: "Work Sans", sans-serif;
+		paint-order: stroke;
+		stroke: #fafafa;
+		stroke-width: 4px;
+		stroke-linejoin: round;
+	}
+	.rgo .panel {
+		fill: #fafafa;
+		stroke: #e2e8f0;
+	}
+	.rgo .ttl {
+		font-size: 14px;
+		font-weight: 600;
+		fill: #334155;
+	}
+	.rgo .orbit {
+		fill: none;
+		stroke: #cbd5e1;
+		stroke-dasharray: 4 5;
+	}
+	.rgo .floor {
+		stroke: #94a3b8;
+		stroke-width: 1.5;
+	}
+	.rgo .ghost {
+		fill: #fff;
+		stroke: #c026d3;
+		stroke-width: 1.5;
+		stroke-dasharray: 3 3;
+	}
+	.rgo .refl {
+		stroke: #94a3b8;
+		stroke-dasharray: 5 4;
+	}
+	.rgo .base {
+		stroke: #334155;
+		stroke-width: 2.5;
+	}
+	.rgo .arc {
+		fill: none;
+		stroke: #7c3aed;
+		stroke-width: 2;
+	}
+	.rgo .ang {
+		font-size: 19px;
+		font-weight: 600;
+		fill: #7c3aed;
+	}
+	.rgo .key {
+		font-size: 17px;
+		font-weight: 700;
+		fill: #334155;
+	}
+	.rgo .c1 {
+		fill: #0891b2;
+		stroke: #fff;
+		stroke-width: 2;
+	}
+	.rgo .c2 {
+		fill: #c026d3;
+		stroke: #fff;
+		stroke-width: 2;
+	}
+	.rgo .cl1 {
+		font-size: 15px;
+		font-weight: 700;
+		fill: #0891b2;
+	}
+	.rgo .cl2 {
+		font-size: 15px;
+		font-weight: 700;
+		fill: #c026d3;
+	}
+	.rgo .sm {
+		font-size: 13px;
+		fill: #475569;
+	}
+	.rgo .dir {
+		stroke: #64748b;
+		stroke-width: 1.5;
+	}
+	.rgo .dirh {
+		fill: #64748b;
+	}
+	@media (max-width: 560px) {
+		.rgo {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 8px 12px;
+		}
+	}
+</style>

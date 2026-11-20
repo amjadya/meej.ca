@@ -1,0 +1,292 @@
+---
+// the vertical plane one shot flies in, drawn on the court in the same view as the launch velocity figure.
+// s is measured along the floor from the spot under the start point, in the heading direction p; h is the height.
+// the drawn shot is real: from p1 = (1.525, 2.6, 12.40) m at v0 = 18 m/s, t = 30 degrees, p = 10 degrees, flown with
+// rk4 at 2 ms steps using dv/dt = -g y_hat - alpha |v| v (alpha 0.215 per m, g 9.81). it lands at r = 8.0 m
+// (x 2.92, z 4.51), peaks at h = 4.2 m, and clears the net at 3.9 m.
+import Birdie from "./Birdie.astro";
+const W = 680;
+const H = 440;
+const YAW = -30;
+const PITCH = 52;
+const L = 13.4;
+const WD = 6.1;
+const NET = L / 2;
+const NETH = 1.55;
+const G = 9.81;
+const ALPHA = 0.215;
+const P1: V3 = [1.525, 2.6, 12.4];
+const V0 = 18;
+const T = 30;
+const PSI = 10;
+
+type V3 = [number, number, number];
+const rad = (d: number) => (d * Math.PI) / 180;
+
+// fly the shot in its own plane: s along the floor, h up
+type S = [number, number, number, number];
+const deriv = ([, , u, w]: S): S => {
+	const sp = Math.hypot(u, w);
+	return [u, w, -ALPHA * sp * u, -G - ALPHA * sp * w];
+};
+const rk4 = (st: S, dt: number): S => {
+	const k1 = deriv(st);
+	const k2 = deriv(st.map((v, i) => v + (dt / 2) * k1[i]) as S);
+	const k3 = deriv(st.map((v, i) => v + (dt / 2) * k2[i]) as S);
+	const k4 = deriv(st.map((v, i) => v + dt * k3[i]) as S);
+	return st.map((v, i) => v + (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])) as S;
+};
+let st: S = [0, P1[1], V0 * Math.cos(rad(T)), V0 * Math.sin(rad(T))];
+const flight: [number, number][] = [[st[0], st[1]]];
+while (st[1] > 0) {
+	const nx = rk4(st, 0.002);
+	if (nx[1] <= 0) {
+		const f = st[1] / (st[1] - nx[1]);
+		flight.push([st[0] + f * (nx[0] - st[0]), 0]);
+		break;
+	}
+	st = nx;
+	flight.push([st[0], st[1]]);
+}
+const R = flight[flight.length - 1][0];
+const peak = flight.reduce((a, b) => (b[1] > a[1] ? b : a));
+const HP = peak[1];
+
+const p = rad(PSI);
+const foot: V3 = [P1[0], 0, P1[2]];
+const d: V3 = [Math.sin(p), 0, -Math.cos(p)];
+const inPlane = (s: number, h: number): V3 => [foot[0] + s * d[0], h, foot[2] + s * d[2]];
+
+const raw = ([x, y, z]: V3): [number, number] => {
+	const a = rad(YAW);
+	const b = rad(PITCH);
+	const xr = x * Math.cos(a) - z * Math.sin(a);
+	const zr = x * Math.sin(a) + z * Math.cos(a);
+	const yr = y * Math.cos(b) + xr * Math.sin(b);
+	return [zr, -yr];
+};
+const box: V3[] = [[0, 0, 0], [WD, 0, 0], [0, 0, L], [WD, 0, L], inPlane(0, HP + 1.2), inPlane(R + 1, HP + 1), [P1[0], P1[1], L]];
+const xs = box.map((q) => raw(q)[0]);
+const ys = box.map((q) => raw(q)[1]);
+const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+const SC = Math.min((W - 90) / (Math.max(...xs) - Math.min(...xs)), (H - 40) / (Math.max(...ys) - Math.min(...ys)));
+const P = (q: V3): [number, number] => {
+	const [x, y] = raw(q);
+	return [W / 2 + SC * (x - cx), H / 2 + SC * (y - cy)];
+};
+const f = (n: number) => n.toFixed(1);
+const line = (pts: V3[]) => pts.map((q, i) => `${i ? "L" : "M"}${P(q).map(f).join(" ")}`).join("");
+const poly = (pts: V3[]) => line(pts) + "z";
+const mul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
+const head = (from: V3, to: V3, size = 12) => {
+	const [x0, y0] = P(from);
+	const [x1, y1] = P(to);
+	const l = Math.hypot(x1 - x0, y1 - y0);
+	const dx = (x1 - x0) / l;
+	const dy = (y1 - y0) / l;
+	const w = size * 0.45;
+	return `${f(x1)},${f(y1)} ${f(x1 - size * dx - w * dy)},${f(y1 - size * dy + w * dx)} ${f(x1 - size * dx + w * dy)},${f(y1 - size * dy - w * dx)}`;
+};
+const at = (q: V3, dx = 0, dy = 0) => {
+	const [x, y] = P(q);
+	return { x: f(x + dx), y: f(y + dy) };
+};
+
+// court
+const sOff = (WD - 5.18) / 2;
+const short = 1.98;
+const longD = 0.76;
+const half = WD / 2;
+const lines: V3[][] = [
+	[[sOff, 0, 0], [sOff, 0, L]],
+	[[WD - sOff, 0, 0], [WD - sOff, 0, L]],
+	[[half, 0, 0], [half, 0, NET - short]],
+	[[half, 0, NET + short], [half, 0, L]],
+	[[0, 0, NET - short], [WD, 0, NET - short]],
+	[[0, 0, NET + short], [WD, 0, NET + short]],
+	[[0, 0, longD], [WD, 0, longD]],
+	[[0, 0, L - longD], [WD, 0, L - longD]],
+];
+const robotStrip = poly([[0, 0, 0], [half, 0, 0], [half, 0, NET], [0, 0, NET]]);
+const meStrip = poly([[0, 0, NET], [half, 0, NET], [half, 0, L], [0, 0, L]]);
+const net = poly([[0, 0, NET], [WD, 0, NET], [WD, NETH, NET], [0, NETH, NET]]);
+const axes: [V3, string, string][] = [
+	[[1.4, 0, 0], "X", "#dc2626"],
+	[[0, 1.4, 0], "Y", "#16a34a"],
+	[[0, 0, 1.4], "Z", "#2563eb"],
+];
+
+// the shot's plane, its axes, the path
+const SMAX = R + 1;
+const HMAXD = HP + 1;
+const plane = poly([inPlane(0, 0), inPlane(SMAX, 0), inPlane(SMAX, HMAXD), inPlane(0, HMAXD)]);
+const path = line(flight.filter((_, i) => i % 10 === 0 || i === flight.length - 1).map(([s, h]) => inPlane(s, h)));
+const N = 32;
+const psR = 3.4;
+const psArc = line(Array.from({ length: N + 1 }, (_, i) => {
+	const a = (p * i) / N;
+	return [foot[0] + psR * Math.sin(a), 0, foot[2] - psR * Math.cos(a)] as V3;
+}));
+const psMid: V3 = [foot[0] + (psR + 0.5) * Math.sin(p / 2), 0, foot[2] - (psR + 0.5) * Math.cos(p / 2)];
+const land = inPlane(R, 0);
+const [bx, by] = P(P1);
+const [nx2, ny2] = P(inPlane(flight[20][0], flight[20][1]));
+const birdieRot = (Math.atan2(ny2 - by, nx2 - bx) * 180) / Math.PI - 90;
+---
+
+<div class="shpl not-prose">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`The court in 3D with one shot from the start point. The shot flies in a vertical plane set by its heading. s runs along the floor from the spot under the start point in the heading direction, and h runs straight up. `}>
+		<rect x="0" y="0" width={W} height={H} class="panel"></rect>
+		<path d={robotStrip} class="robot"></path>
+		<path d={meStrip} class="me"></path>
+		<path d={poly([[0, 0, 0], [WD, 0, 0], [WD, 0, L], [0, 0, L]])} class="court"></path>
+		{lines.map((l) => <path d={line(l)} class="cl"></path>)}
+		<text {...at([half / 2, 0, NET / 2 - 1.6], 0, 4)} class="tag" text-anchor="middle">robot</text>
+		<text {...at([half / 2, 0, NET + NET / 2 + 1.2], 0, 4)} class="tag" text-anchor="middle">me</text>
+		{axes.map(([e, n, col]) => (
+			<g>
+				<path d={line([[0, 0, 0], e])} stroke={col} class="ax"></path>
+				<polygon points={head([0, 0, 0], e, 10)} fill={col}></polygon>
+				<text {...at(mul(e, 1.25), 0, 5)} class="axl" fill={col} text-anchor="middle">{n}</text>
+			</g>
+		))}
+		<path d={line([foot, [foot[0], 0, foot[2] - 4.6]])} class="ref"></path>
+		<text {...at([foot[0], 0, foot[2] - 4.6], 6, 18)} class="sm" text-anchor="start">ψ = 0</text>
+		<path d={psArc} class="arc"></path>
+		<text {...at(psMid, 0, 6)} class="ang" text-anchor="middle">ψ</text>
+		<path d={net} class="net"></path>
+		<path d={plane} class="vplane"></path>
+		<path d={line([foot, inPlane(SMAX, 0)])} class="sax"></path>
+		<polygon points={head(foot, inPlane(SMAX, 0))} class="saxh"></polygon>
+		<text {...at(inPlane(SMAX, 0), -8, -10)} class="key" text-anchor="end">s</text>
+		<path d={line([foot, inPlane(0, HMAXD)])} class="sax"></path>
+		<polygon points={head(foot, inPlane(0, HMAXD))} class="saxh"></polygon>
+		<text {...at(inPlane(0, HMAXD), 0, -10)} class="key" text-anchor="middle">h</text>
+		<path d={path} class="path"></path>
+		<g transform={`translate(${f(bx)} ${f(by)}) rotate(${f(birdieRot)}) scale(0.4) translate(0 -30)`}>
+			<Birdie uid="sp" />
+		</g>
+		<text {...at(P1, 12, 26)} class="sm" text-anchor="start">P₁</text>
+	</svg>
+</div>
+
+<style is:global>
+	.shpl {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.shpl svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+	.shpl text {
+		paint-order: stroke;
+		stroke: #fafafa;
+		stroke-width: 4px;
+		stroke-linejoin: round;
+	}
+	.shpl .panel {
+		fill: #fafafa;
+		stroke: #e2e8f0;
+	}
+	.shpl .court {
+		fill: none;
+		stroke: #94a3b8;
+		stroke-width: 1.4;
+	}
+	.shpl .cl {
+		fill: none;
+		stroke: #cbd5e1;
+		stroke-width: 1;
+	}
+	.shpl .robot {
+		fill: rgba(37, 99, 235, 0.08);
+	}
+	.shpl .me {
+		fill: rgba(217, 119, 6, 0.09);
+	}
+	.shpl .net {
+		fill: rgba(51, 65, 85, 0.12);
+		stroke: #475569;
+		stroke-width: 1.4;
+	}
+	.shpl .ax {
+		stroke-width: 2.5;
+		fill: none;
+	}
+	.shpl .ref {
+		stroke: #94a3b8;
+		stroke-dasharray: 3 5;
+		fill: none;
+	}
+	.shpl .arc {
+		fill: none;
+		stroke: #7c3aed;
+		stroke-width: 1.8;
+	}
+	.shpl .ang {
+		font: 600 18px "Work Sans", sans-serif;
+		fill: #7c3aed;
+	}
+	.shpl .vplane {
+		fill: rgba(124, 58, 237, 0.09);
+		stroke: rgba(124, 58, 237, 0.35);
+		stroke-width: 1;
+	}
+	.shpl .sax {
+		stroke: #0f172a;
+		stroke-width: 2.2;
+		fill: none;
+	}
+	.shpl .saxh {
+		fill: #0f172a;
+	}
+	.shpl .path {
+		fill: none;
+		stroke: #d97706;
+		stroke-width: 3;
+	}
+	.shpl .dim {
+		stroke: #64748b;
+		stroke-dasharray: 5 4;
+		fill: none;
+	}
+	.shpl .tick {
+		stroke: #0f172a;
+		stroke-width: 1.5;
+	}
+	.shpl .landing {
+		fill: #d97706;
+		stroke: #fff;
+		stroke-width: 1.5;
+	}
+	.shpl .key {
+		font: 700 17px "Work Sans", sans-serif;
+		fill: #0f172a;
+	}
+	.shpl .axl {
+		font: 700 14px "Work Sans", sans-serif;
+	}
+	.shpl .tag {
+		font: 600 13px "Work Sans", sans-serif;
+		fill: #64748b;
+	}
+	.shpl .sm {
+		font: 600 14px "Work Sans", sans-serif;
+		fill: #334155;
+	}
+	@media (max-width: 560px) {
+		.shpl {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 8px 12px;
+		}
+	}
+</style>

@@ -1,0 +1,123 @@
+---
+// top view of a badminton court to bwf dimensions, with the half court each side plays in shaded:
+// centre line to doubles sideline (3.05 m) by net to baseline (6.70 m), the robot on one side, the player on the other.
+// with start, it also marks the spot every simulated shot starts from: 1 m inside my baseline, centred in my half court.
+interface Props {
+	start?: boolean;
+}
+const { start = false } = Astro.props;
+import CourtAxes from "./CourtAxes.astro";
+const L = 13.4;
+const Wd = 6.1;
+const Ws = 5.18;
+const W = 680;
+const s = 40;
+const ox = (W - L * s) / 2;
+const oy = 44;
+const X = (x: number) => ox + x * s;
+const Y = (y: number) => oy + y * s;
+const sOff = (Wd - Ws) / 2;
+const mid = Wd / 2;
+const net = L / 2;
+const short = 1.98;
+const longD = 0.76;
+const half = Wd / 2;
+---
+
+<div class="cta not-prose">
+	<svg viewBox={`0 0 ${W} ${oy + Wd * s + 64}`} role="img" aria-label="Top view of a badminton court, 13.40 m by 6.10 m. One half of the doubles court on each side of the net is shaded, 3.05 m wide from the centre line to the doubles sideline and 6.70 m deep from the net to the baseline: the robot plays in one, I play in the other.">
+		<rect x={X(0)} y={Y(mid)} width={net * s} height={half * s} class="robot"></rect>
+		<rect x={X(net)} y={Y(mid)} width={net * s} height={half * s} class="me"></rect>
+		<text x={X(net / 2)} y={Y(mid + half / 2) + 5} class="tag" text-anchor="middle">robot</text>
+		<text x={X(net + net / 2)} y={Y(mid + half / 2) + 5} class="tag" text-anchor="middle">me</text>
+
+		<rect x={X(0)} y={Y(0)} width={L * s} height={Wd * s} class="ln"></rect>
+		<line x1={X(0)} y1={Y(sOff)} x2={X(L)} y2={Y(sOff)} class="ln"></line>
+		<line x1={X(0)} y1={Y(Wd - sOff)} x2={X(L)} y2={Y(Wd - sOff)} class="ln"></line>
+		<line x1={X(net - short)} y1={Y(0)} x2={X(net - short)} y2={Y(Wd)} class="ln"></line>
+		<line x1={X(net + short)} y1={Y(0)} x2={X(net + short)} y2={Y(Wd)} class="ln"></line>
+		<line x1={X(longD)} y1={Y(0)} x2={X(longD)} y2={Y(Wd)} class="ln"></line>
+		<line x1={X(L - longD)} y1={Y(0)} x2={X(L - longD)} y2={Y(Wd)} class="ln"></line>
+		<line x1={X(0)} y1={Y(mid)} x2={X(net - short)} y2={Y(mid)} class="ln"></line>
+		<line x1={X(net + short)} y1={Y(mid)} x2={X(L)} y2={Y(mid)} class="ln"></line>
+		<line x1={X(net)} y1={Y(0) - 8} x2={X(net)} y2={Y(Wd) + 8} class="net"></line>
+		<text x={X(net)} y={Y(0) - 14} class="sm" text-anchor="middle">net</text>
+		<CourtAxes x={X(0)} y={Y(Wd)} view="top" />
+
+		<path d={`M${X(0)} ${Y(Wd) + 26}H${X(L)}`} class="dim"></path>
+		<text x={X(L / 2)} y={Y(Wd) + 44} class="sm" text-anchor="middle">13.40 m</text>
+		<path d={`M${X(0)} ${Y(0) - 22}H${X(net)}`} class="dim"></path>
+		<text x={X(net / 2)} y={Y(0) - 28} class="sm" text-anchor="middle">6.70 m</text>
+		<path d={`M${X(L) + 20} ${Y(mid)}V${Y(Wd)}`} class="dim"></path>
+		<text x={X(L) + 26} y={Y(mid + half / 2) + 5} class="sm">3.05 m</text>
+		{start && (
+			<g>
+				<circle cx={X(L - 1)} cy={Y(mid + half / 2)} r="6" class="st"></circle>
+				<text x={X(L - 1)} y={Y(mid + half / 2) - 12} class="sm" text-anchor="middle">start</text>
+			</g>
+		)}
+		<path d={`M${X(0) - 20} ${Y(0)}V${Y(Wd)}`} class="dim"></path>
+		<text x={X(0) - 26} y={Y(mid) + 5} class="sm" text-anchor="end">6.10 m</text>
+	</svg>
+</div>
+
+<style is:global>
+	.cta {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.cta svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+		overflow: visible;
+	}
+	.cta .ln {
+		fill: none;
+		stroke: #64748b;
+		stroke-width: 1.5;
+	}
+	.cta .net {
+		stroke: #1e293b;
+		stroke-width: 3;
+	}
+	.cta .robot {
+		fill: rgba(37, 99, 235, 0.16);
+	}
+	.cta .me {
+		fill: rgba(217, 119, 6, 0.18);
+	}
+	.cta .dim {
+		stroke: #94a3b8;
+		stroke-width: 1;
+		marker-start: none;
+	}
+	.cta .st {
+		fill: #d97706;
+		stroke: #fff;
+		stroke-width: 2;
+	}
+	.cta .tag {
+		font: 600 16px "Work Sans", sans-serif;
+		fill: #334155;
+	}
+	.cta .sm {
+		font: 13px "Work Sans", sans-serif;
+		fill: #475569;
+	}
+	@media (max-width: 560px) {
+		.cta {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 12px 12px;
+		}
+		.cta .sm {
+			font-size: 17px;
+		}
+	}
+</style>

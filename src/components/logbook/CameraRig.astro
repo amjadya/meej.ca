@@ -1,0 +1,562 @@
+---
+// two cameras behind the robot's baseline, every choice from the camera constraints on a slider. the left panel is the
+// court in 3d (drag to turn) with each camera's field of view out to 16 m and its footprint on the floor; the two
+// small panels are what each camera sees, shown the way it is mounted (a portrait camera gives a tall picture).
+// camera model: pinhole, 44.9 by 29.0 degrees (the 2026-10-01 calibration), no lens distortion, no occlusion.
+// the clear is the figure 6 default: from p1 = (1.525, 2.6, 12.40) m at 43 m/s, 36 degrees, straight down the court,
+// rk4 at 1 ms with alpha 0.215 per m and g 9.81, sampled every 10 ms (100 fps) until it lands.
+// court frame: x across, y up, z toward the net, origin at the robot-side corner. the rig points straight down the
+// court; both cameras share one pitch, and their yaw is mirrored (camera 1 turns +g toward +x, camera 2 turns -g),
+// so yaw 0 faces +z (toward the net) and positive yaw turns them toward each other when side by side. positive pitch
+// tilts up, roll is landscape (0) or portrait (90) only. the rig centre is
+// the midpoint between the cameras; camera 2 sits b along (cos e cos l, sin e, cos e sin l) from camera 1.
+const G = 9.81;
+const ALPHA = 0.215;
+type S = [number, number, number, number];
+const deriv = ([, , u, w]: S): S => {
+	const sp = Math.hypot(u, w);
+	return [u, w, -ALPHA * sp * u, -G - ALPHA * sp * w];
+};
+const rk4 = (st: S, h: number): S => {
+	const k1 = deriv(st);
+	const k2 = deriv(st.map((v, i) => v + (h / 2) * k1[i]) as S);
+	const k3 = deriv(st.map((v, i) => v + (h / 2) * k2[i]) as S);
+	const k4 = deriv(st.map((v, i) => v + h * k3[i]) as S);
+	return st.map((v, i) => v + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])) as S;
+};
+// props: still hides the controls, one draws camera 1 alone at the rig centre, values sets the controls,
+// shot is [v0, theta, psi, start height], home draws the home zone (1 m around (1.525, 0, 3.35)).
+interface Props {
+	still?: boolean;
+	one?: boolean;
+	home?: boolean;
+	values?: Record<string, number>;
+	portrait?: boolean;
+	shot?: [number, number, number, number];
+}
+const { still = false, one = false, home = false, values = {}, portrait = true, shot = [43, 36, 0, 2.6] } = Astro.props;
+const th = (shot[1] * Math.PI) / 180;
+const sp = (shot[2] * Math.PI) / 180;
+let st: S = [0, shot[3], shot[0] * Math.cos(th), shot[0] * Math.sin(th)];
+const clear: number[][] = [];
+for (let k = 0; st[1] > 0 && k < 1000; k++) {
+	clear.push([+(1.525 + st[0] * Math.sin(sp)).toFixed(3), +st[1].toFixed(3), +(12.4 - st[0] * Math.cos(sp)).toFixed(3)]);
+	for (let j = 0; j < 10; j++) st = rk4(st, 0.001);
+}
+
+const sliders = [
+	{ g: "rig", items: [
+		["mx", "across X", 0, 6.1, 0.05, 1.525, "m"],
+		["my", "height", 0, 5, 0.05, 1.0, "m"],
+		["mz", "behind baseline", 0, 2.5, 0.05, 2.0, "m"],
+		["b", "baseline B", 0.2, 2, 0.01, 0.5, "m"],
+		["l", "λ: side by side (0) to front and back (±90)", -90, 90, 1, 0, "°"],
+		["e", "ε: level (0) to stacked (±90)", -90, 90, 1, 0, "°"],
+	] },
+	{ g: "both cameras", items: [
+		["yw", "yaw γ: straight (0) to turned towards each other (90)", 0, 90, 1, 0, "°"],
+		["pt", "pitch β", -90, 90, 1, 12, "°"],
+	] },
+] as const;
+---
+
+<div class={`crig not-prose${still ? " still" : ""}`} data-crig data-clear={JSON.stringify(clear)} data-one={one ? "1" : "0"} data-home={home ? "1" : "0"} data-portrait={portrait ? "1" : "0"}>
+	<div class="views">
+		<svg viewBox="0 0 680 420" class="world" data-world role="img" aria-label="The court in 3D with two cameras behind the robot's baseline, their fields of view and their footprints on the floor, and a clear. Drag to turn the view.">
+			<rect x="0" y="0" width="680" height="420" class="panel"></rect>
+			<g data-scene></g>
+			<text x="670" y="410" class="hint" text-anchor="end">drag to turn</text>
+		</svg>
+		<div class={one ? "cams one" : "cams"}>
+			{(one ? [1] : [1, 2]).map((k) => (
+				<figure class="cam">
+					<svg viewBox="0 0 320 200" data-cam={k} role="img" aria-label={`What camera ${k} sees, held the way it is mounted.`}>
+						<defs>
+							<clipPath id={`crig-clip-${k}`}><rect x="0" y="0" width="320" height="200" data-clip={k}></rect></clipPath>
+						</defs>
+						<rect x="0" y="0" width="320" height="200" class="sensor" data-sensor={k}></rect>
+						<g clip-path={`url(#crig-clip-${k})`} data-camscene={k}></g>
+					</svg>
+					<figcaption class={`c${k}`}>camera {k} sees</figcaption>
+				</figure>
+			))}
+		</div>
+	</div>
+	<div class="read" data-read></div>
+	<div class="ctl">
+		{sliders.map((grp) => (
+			<fieldset>
+				<legend>{grp.g}</legend>
+				{grp.items.map(([id, label, min, max, step, val, unit]) => (
+					<label>
+						<span class="nm">{label}</span>
+						<input type="range" min={min} max={max} step={step} value={values[id] ?? val} data-k={id} />
+						<span class="val" data-v={id} data-unit={unit}></span>
+					</label>
+				))}
+				{grp.g !== "rig" && ["1", "2"].map((n) => (
+					<div class="tog" role="group" aria-label={`camera ${n} roll`}>
+						<span class="nm">camera {n} roll ρ{n === "1" ? "₁" : "₂"}</span>
+						<button type="button" data-roll={n} data-o="0" aria-pressed="false">landscape</button>
+						<button type="button" data-roll={n} data-o="90" aria-pressed="true">portrait</button>
+					</div>
+				))}
+			</fieldset>
+		))}
+	</div>
+</div>
+
+<script>
+	type V = [number, number, number];
+	const L = 13.4, WD = 6.1, NET = 6.7, NETH = 1.55, HALF = 3.05;
+	const TH = Math.tan((44.9 * Math.PI) / 360);
+	const TV = Math.tan((29.0 * Math.PI) / 360);
+	const FAR = 16;
+	const rad = (d: number) => (d * Math.PI) / 180;
+	const add = (a: V, b: V): V => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+	const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+	const mul = (a: V, k: number): V => [a[0] * k, a[1] * k, a[2] * k];
+	const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+	const cross = (a: V, b: V): V => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+	const f1 = (n: number) => n.toFixed(1);
+
+	// court lines as world segments
+	const sOff = (WD - 5.18) / 2, short = 1.98, longD = 0.76;
+	const courtLines: [V, V][] = [
+		[[0, 0, 0], [WD, 0, 0]], [[WD, 0, 0], [WD, 0, L]], [[WD, 0, L], [0, 0, L]], [[0, 0, L], [0, 0, 0]],
+		[[sOff, 0, 0], [sOff, 0, L]], [[WD - sOff, 0, 0], [WD - sOff, 0, L]],
+		[[HALF, 0, 0], [HALF, 0, NET - short]], [[HALF, 0, NET + short], [HALF, 0, L]],
+		[[0, 0, NET - short], [WD, 0, NET - short]], [[0, 0, NET + short], [WD, 0, NET + short]],
+		[[0, 0, longD], [WD, 0, longD]], [[0, 0, L - longD], [WD, 0, L - longD]],
+	];
+	const netPoly: V[] = [[0, 0, NET], [WD, 0, NET], [WD, NETH, NET], [0, NETH, NET]];
+	const robotHalf: V[] = [[0, 0, 0], [HALF, 0, 0], [HALF, 0, NET], [0, 0, NET]];
+
+	document.querySelectorAll<HTMLElement>("[data-crig]").forEach((root) => {
+		const clear: V[] = JSON.parse(root.dataset.clear!);
+		const q = <T extends Element>(s: string) => root.querySelector<T>(s)!;
+		const world = q<SVGSVGElement>("[data-world]");
+		const scene = q<SVGGElement>("[data-scene]");
+		const inputs = Array.from(root.querySelectorAll<HTMLInputElement>("[data-k]"));
+		const val = (k: string) => Number(inputs.find((i) => i.dataset.k === k)!.value);
+		let vyaw = -38, vpitch = 26;
+
+		// 3d view projection
+		const SC = 27, CX = 3.05, CY = 1.8, CZ = 5.2;
+		const P = ([x, y, z]: V): [number, number] => {
+			const a = rad(vyaw), b = rad(vpitch);
+			const dx = x - CX, dy = y - CY, dz = z - CZ;
+			const xr = dx * Math.cos(a) - dz * Math.sin(a);
+			const zr = dx * Math.sin(a) + dz * Math.cos(a);
+			const yr = dy * Math.cos(b) + xr * Math.sin(b);
+			return [340 + SC * zr, 215 - SC * yr];
+		};
+		const pts = (vs: V[]) => vs.map((v) => P(v).map(f1).join(",")).join(" ");
+		const seg = (a: V, b: V) => { const [x1, y1] = P(a), [x2, y2] = P(b); return `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`; };
+
+		type Cam = { c: V; f: V; r: V; u: V; th: number; tv: number; w: number; h: number };
+		const camera = (c: V, yawD: number, pitchD: number, portrait: boolean): Cam => {
+			const g = rad(yawD), b = rad(pitchD);
+			const f: V = [Math.cos(b) * Math.sin(g), Math.sin(b), Math.cos(b) * Math.cos(g)];
+			const r: V = [-Math.cos(g), 0, Math.sin(g)];
+			const u = cross(r, f);
+			return portrait ? { c, f, r, u, th: TV, tv: TH, w: 200, h: 320 } : { c, f, r, u, th: TH, tv: TV, w: 320, h: 200 };
+		};
+		const one = root.dataset.one === "1";
+		const showHome = root.dataset.home === "1";
+		const roll: Record<string, boolean> = { "1": root.dataset.portrait === "1", "2": root.dataset.portrait === "1" };
+		if (!roll["1"]) root.querySelectorAll<HTMLButtonElement>("[data-roll]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.o === "0")));
+		const homeRing: V[] = Array.from({ length: 48 }, (_, i) => [1.525 + Math.cos((i / 48) * 2 * Math.PI), 0, 3.35 + Math.sin((i / 48) * 2 * Math.PI)] as V);
+		const toCam = (k: Cam, p: V): V => { const d = sub(p, k.c); return [dot(d, k.r), dot(d, k.u), dot(d, k.f)]; };
+		const inView = (k: Cam, p: V) => { const [x, y, z] = toCam(k, p); return z > 0.05 && Math.abs(x / z) <= k.th && Math.abs(y / z) <= k.tv; };
+
+		const NEAR = 0.05;
+		const clipSeg = (a: V, b: V): [V, V] | null => {
+			if (a[2] < NEAR && b[2] < NEAR) return null;
+			if (a[2] >= NEAR && b[2] >= NEAR) return [a, b];
+			const t = (NEAR - a[2]) / (b[2] - a[2]);
+			const m: V = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), NEAR];
+			return a[2] < NEAR ? [m, b] : [a, m];
+		};
+		const clipPoly = (vs: V[]): V[] => {
+			const out: V[] = [];
+			vs.forEach((a, i) => {
+				const b = vs[(i + 1) % vs.length];
+				const ain = a[2] >= NEAR, bin = b[2] >= NEAR;
+				if (ain) out.push(a);
+				if (ain !== bin) { const t = (NEAR - a[2]) / (b[2] - a[2]); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), NEAR]); }
+			});
+			return out;
+		};
+		const corners = (k: Cam, d: number): V[] => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) =>
+			add(k.c, mul(add(add(k.f, mul(k.r, sx * k.th)), mul(k.u, sy * k.tv)), d)));
+		// floor footprint: the frustum (apex plus far rectangle) cut by the plane y = 0
+		const footprint = (k: Cam): V[] => {
+			const far = corners(k, FAR);
+			const edges: [V, V][] = far.map((p) => [k.c, p] as [V, V]).concat(far.map((p, i) => [p, far[(i + 1) % 4]] as [V, V]));
+			const hits: V[] = [];
+			edges.forEach(([a, b]) => {
+				if ((a[1] > 0) !== (b[1] > 0)) { const t = a[1] / (a[1] - b[1]); hits.push([a[0] + t * (b[0] - a[0]), 0, a[2] + t * (b[2] - a[2])]); }
+			});
+			far.forEach((p) => { if (Math.abs(p[1]) < 1e-9) hits.push(p); });
+			if (k.c[1] <= 0) hits.push(k.c);
+			if (hits.length < 3) return [];
+			const cx = hits.reduce((s, p) => s + p[0], 0) / hits.length, cz = hits.reduce((s, p) => s + p[2], 0) / hits.length;
+			return hits.sort((a, b) => Math.atan2(a[2] - cz, a[0] - cx) - Math.atan2(b[2] - cz, b[0] - cx));
+		};
+
+		const camView = (n: number, k: Cam) => {
+			const img = ([x, y, z]: V): [number, number] => [k.w / 2 + (x / z / k.th) * (k.w / 2), k.h / 2 - (y / z / k.tv) * (k.h / 2)];
+			const svg = q(`[data-cam="${n}"]`);
+			svg.setAttribute("viewBox", `0 0 ${k.w} ${k.h}`);
+			[q(`[data-clip="${n}"]`), q(`[data-sensor="${n}"]`)].forEach((r) => { r.setAttribute("width", String(k.w)); r.setAttribute("height", String(k.h)); });
+			svg.setAttribute("style", `width:${(k.w / 320) * 100}%`);
+			let h = "";
+			const half = clipPoly(robotHalf.map((p) => toCam(k, p)));
+			if (half.length > 2) h += `<polygon points="${half.map((p) => img(p).map(f1).join(",")).join(" ")}" class="half"/>`;
+			if (showHome) { const hz = clipPoly(homeRing.map((p) => toCam(k, p))); if (hz.length > 2) h += `<polygon points="${hz.map((p) => img(p).map(f1).join(",")).join(" ")}" class="homez"/>`; }
+			const net = clipPoly(netPoly.map((p) => toCam(k, p)));
+			if (net.length > 2) h += `<polygon points="${net.map((p) => img(p).map(f1).join(",")).join(" ")}" class="netp"/>`;
+			courtLines.forEach(([a, b]) => {
+				const s2 = clipSeg(toCam(k, a), toCam(k, b));
+				if (s2) { const [x1, y1] = img(s2[0]), [x2, y2] = img(s2[1]); h += `<path d="M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}" class="cl"/>`; }
+			});
+			let d = "";
+			for (let i = 1; i < clear.length; i++) {
+				const s2 = clipSeg(toCam(k, clear[i - 1]), toCam(k, clear[i]));
+				if (s2) { const [x1, y1] = img(s2[0]), [x2, y2] = img(s2[1]); d += `M${f1(x1)} ${f1(y1)}L${f1(x2)} ${f1(y2)}`; }
+			}
+			h += `<path d="${d}" class="clr"/>`;
+			q(`[data-camscene="${n}"]`).innerHTML = h;
+		};
+
+		const draw = () => {
+			inputs.forEach((i) => { const v = q(`[data-v="${i.dataset.k}"]`); v.textContent = `${Number(i.value).toFixed(i.step.includes(".") ? (i.step === "0.01" ? 2 : 2) : 0)} ${v.getAttribute("data-unit")}`; });
+			const m: V = [val("mx"), val("my"), -val("mz")];
+			const B = val("b"), l = rad(val("l")), e = rad(val("e"));
+			const dir: V = [Math.cos(e) * Math.cos(l), Math.sin(e), Math.cos(e) * Math.sin(l)];
+			const c1 = one ? m : sub(m, mul(dir, B / 2)), c2 = add(m, mul(dir, B / 2));
+			const k1 = camera(c1, val("yw"), val("pt"), roll["1"]);
+			const k2 = camera(c2, -val("yw"), val("pt"), roll["2"]);
+
+			let h = "";
+			h += `<polygon points="${pts([[0, 0, -2.5], [WD, 0, -2.5], [WD, 0, 0], [0, 0, 0]])}" class="zone"/>`;
+			h += `<polygon points="${pts(robotHalf)}" class="half"/>`;
+			h += `<polygon points="${pts([[0, 0, NET], [HALF, 0, NET], [HALF, 0, L], [0, 0, L]])}" class="me"/>`;
+			const ks = one ? [k1] : [k1, k2];
+			ks.forEach((k, i) => { const fp = footprint(k); if (fp.length > 2) h += `<polygon points="${pts(fp)}" class="fp fp${i + 1}"/>`; });
+			courtLines.forEach(([a, b]) => (h += `<path d="${seg(a, b)}" class="cl"/>`));
+			if (showHome) h += `<polygon points="${pts(homeRing)}" class="homez"/>`;
+			h += `<polygon points="${pts(netPoly)}" class="netp"/>`;
+			h += `<path d="${clear.map((p, i) => (i ? "L" : "M") + P(p).map(f1).join(" ")).join("")}" class="clr"/>`;
+			ks.forEach((k, i) => {
+				const far = corners(k, FAR);
+				h += `<polygon points="${pts(far)}" class="fr fr${i + 1}"/>`;
+				far.forEach((p) => (h += `<path d="${seg(k.c, p)}" class="fe fe${i + 1}"/>`));
+				const [x, y] = P(k.c);
+				h += `<circle cx="${f1(x)}" cy="${f1(y)}" r="6" class="dot d${i + 1}"/><text x="${f1(x)}" y="${f1(y - 11)}" class="cn c${i + 1}" text-anchor="middle">${i + 1}</text>`;
+			});
+			scene.innerHTML = h;
+			camView(1, k1);
+			if (!one) camView(2, k2);
+
+			let n1 = 0, n2 = 0, nb = 0;
+			clear.forEach((p) => { const a = inView(k1, p), b = inView(k2, p); n1 += +a; n2 += +b; nb += +(a && b); });
+			let g = 0, gb = 0;
+			for (let x = 0.05; x < HALF; x += 0.1) for (let z = 0.05; z < NET; z += 0.1) { g++; const p: V = [x, 0, z]; if (inView(k1, p) && inView(k2, p)) gb++; }
+			if (one) {
+				const hz = homeRing.concat([[1.525, 0, 3.35]]).filter((p) => inView(k1, p)).length;
+				q("[data-read]").innerHTML =
+					`<span>frames of this shot in view (100 fps): <b>${n1}</b> of ${clear.length}</span>` +
+					`<span>home zone edge and centre in view: <b>${hz}</b> of 49 points</span>`;
+				return;
+			}
+			const warn = c1[1] < 0 || c2[1] < 0 || c1[2] > 0 || c2[2] > 0 || c1[2] < -2.5 || c2[2] < -2.5 ? "a camera is outside the space behind the baseline" : "";
+			q("[data-read]").innerHTML =
+				`<span>frames of the clear in view (100 fps): camera 1 <b>${n1}</b>, camera 2 <b>${n2}</b>, both <b>${nb}</b> of ${clear.length}</span>` +
+				`<span>robot's half of the floor seen by both: <b>${Math.round((100 * gb) / g)}%</b></span>` +
+				`<span class="warn">${warn}</span>`;
+		};
+		inputs.forEach((i) => i.addEventListener("input", draw));
+		root.querySelectorAll<HTMLButtonElement>("[data-roll]").forEach((bt) => bt.addEventListener("click", () => {
+			const n = bt.dataset.roll!;
+			roll[n] = bt.dataset.o === "90";
+			root.querySelectorAll<HTMLButtonElement>(`[data-roll="${n}"]`).forEach((o) => o.setAttribute("aria-pressed", String(o === bt)));
+			draw();
+		}));
+		let drag: [number, number] | null = null;
+		world.addEventListener("pointerdown", (ev) => { drag = [ev.clientX, ev.clientY]; world.setPointerCapture(ev.pointerId); });
+		world.addEventListener("pointermove", (ev) => {
+			if (!drag) return;
+			vyaw += (ev.clientX - drag[0]) * 0.4;
+			vpitch = Math.max(0, Math.min(89, vpitch + (ev.clientY - drag[1]) * 0.4));
+			drag = [ev.clientX, ev.clientY];
+			draw();
+		});
+		const end = () => (drag = null);
+		world.addEventListener("pointerup", end);
+		world.addEventListener("pointercancel", end);
+		draw();
+	});
+</script>
+
+<style is:global>
+	.crig {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+		font-family: "Work Sans", sans-serif;
+	}
+	.crig svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.crig .world {
+		max-width: 680px;
+		margin: 0 auto;
+		touch-action: none;
+		cursor: grab;
+	}
+	.crig .panel {
+		fill: #fafafa;
+		stroke: #e2e8f0;
+	}
+	.crig .hint {
+		font-size: 12px;
+		fill: #94a3b8;
+	}
+	.crig .cams {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+		max-width: 680px;
+		margin: 10px auto 0;
+	}
+	.crig .cam {
+		margin: 0;
+		height: 330px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
+	}
+	.crig .cam svg {
+		margin: 0 auto;
+	}
+	.crig .tog {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px;
+		margin-top: 8px;
+		font-size: 12.5px;
+		color: #475569;
+	}
+	.crig .tog .nm {
+		width: 100%;
+	}
+	.crig .tog button {
+		font: 600 11px ui-monospace, Menlo, Consolas, monospace;
+		padding: 3px 7px;
+		border: 1px solid #cbd5e1;
+		background: #f8fafc;
+		color: #475569;
+		cursor: pointer;
+	}
+	.crig .tog button[aria-pressed="true"] {
+		background: #00a86b;
+		border-color: #00a86b;
+		color: #fff;
+	}
+	.crig .sensor {
+		fill: #1e293b;
+	}
+	.crig .cam .cl {
+		stroke: #e2e8f0;
+		stroke-width: 1.2;
+		fill: none;
+	}
+	.crig .cam .half {
+		fill: rgba(96, 165, 250, 0.3);
+	}
+	.crig .cam .netp {
+		fill: rgba(226, 232, 240, 0.25);
+		stroke: #e2e8f0;
+	}
+	.crig .cam .clr {
+		stroke: #fbbf24;
+		stroke-width: 2.5;
+		fill: none;
+	}
+	.crig figcaption {
+		font-size: 13px;
+		font-weight: 600;
+		text-align: center;
+		margin-top: 4px;
+	}
+	.crig .c1 {
+		color: #0891b2;
+		fill: #0891b2;
+	}
+	.crig .c2 {
+		color: #c026d3;
+		fill: #c026d3;
+	}
+	.crig .world .cl {
+		stroke: #94a3b8;
+		stroke-width: 1;
+		fill: none;
+	}
+	.crig .world .zone {
+		fill: rgba(16, 185, 129, 0.12);
+		stroke: rgba(16, 185, 129, 0.5);
+		stroke-dasharray: 4 4;
+	}
+	.crig .world .half {
+		fill: rgba(37, 99, 235, 0.1);
+	}
+	.crig .world .me {
+		fill: rgba(217, 119, 6, 0.1);
+	}
+	.crig .world .netp {
+		fill: rgba(51, 65, 85, 0.12);
+		stroke: #475569;
+	}
+	.crig .world .clr {
+		stroke: #d97706;
+		stroke-width: 2.5;
+		fill: none;
+	}
+	.crig.still .ctl,
+	.crig.still .hint {
+		display: none;
+	}
+	.crig .cams.one {
+		grid-template-columns: 1fr;
+	}
+	.crig .cam .homez {
+		fill: rgba(52, 211, 153, 0.75);
+		stroke: #a7f3d0;
+	}
+	.crig .homez {
+		fill: rgba(16, 185, 129, 0.18);
+		stroke: #059669;
+		stroke-width: 1.5;
+	}
+	.crig .fp1 {
+		fill: rgba(8, 145, 178, 0.16);
+		stroke: rgba(8, 145, 178, 0.6);
+	}
+	.crig .fp2 {
+		fill: rgba(192, 38, 211, 0.13);
+		stroke: rgba(192, 38, 211, 0.55);
+	}
+	.crig .fr {
+		fill: none;
+		stroke-width: 0.8;
+		stroke-dasharray: 3 4;
+	}
+	.crig .fe {
+		stroke-width: 1;
+	}
+	.crig .fr1,
+	.crig .fe1 {
+		stroke: rgba(8, 145, 178, 0.55);
+	}
+	.crig .fr2,
+	.crig .fe2 {
+		stroke: rgba(192, 38, 211, 0.5);
+	}
+	.crig .dot {
+		stroke: #fff;
+		stroke-width: 1.5;
+	}
+	.crig .d1 {
+		fill: #0891b2;
+	}
+	.crig .d2 {
+		fill: #c026d3;
+	}
+	.crig .cn {
+		font-size: 13px;
+		font-weight: 700;
+		paint-order: stroke;
+		stroke: #fafafa;
+		stroke-width: 4px;
+	}
+	.crig .read {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+		height: 4.8em;
+		margin: 8px 0;
+		font-size: 14px;
+		color: #334155;
+		text-align: center;
+	}
+	.crig .read b {
+		font-variant-numeric: tabular-nums;
+		display: inline-block;
+		min-width: 2.2em;
+		text-align: right;
+	}
+	.crig .warn {
+		color: #b91c1c;
+		min-height: 1.2em;
+	}
+	.crig .ctl {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 10px;
+	}
+	.crig fieldset {
+		border: 1px solid #e2e8f0;
+		margin: 0;
+		padding: 6px 10px 8px;
+		min-width: 0;
+	}
+	.crig legend {
+		font-size: 12px;
+		font-weight: 700;
+		color: #475569;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+	}
+	.crig fieldset label {
+		display: grid;
+		grid-template-columns: 1fr;
+		font-size: 12.5px;
+		color: #475569;
+		margin-top: 4px;
+	}
+	.crig fieldset label .nm {
+		display: flex;
+		justify-content: space-between;
+	}
+	.crig fieldset label input {
+		width: 100%;
+	}
+	.crig fieldset label .val {
+		font-variant-numeric: tabular-nums;
+		font-size: 12px;
+		color: #0f172a;
+		text-align: right;
+		margin-top: -2px;
+	}
+	@media (max-width: 560px) {
+		.crig {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 8px 12px;
+		}
+		.crig .ctl,
+		.crig .cams {
+			grid-template-columns: 1fr;
+		}
+	}
+</style>

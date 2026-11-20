@@ -1,0 +1,95 @@
+---
+// a shuttlecock drawn in its own millimetre frame, cork pointing down, centred near the origin.
+interface Props {
+	uid: string;
+	transform?: string;
+	opacity?: number;
+}
+
+const { uid, transform, opacity = 1 } = Astro.props;
+
+const rimY = -40;
+const rimR = 33;
+const rimRy = 7;
+const baseY = 22;
+const baseR = 12;
+const baseRy = 3;
+const deg = Math.PI / 180;
+const f2 = (v: number) => v.toFixed(2);
+
+// front feathers from the outside in, so the middle ones overlap the edges
+const N = 7;
+const angles = Array.from({ length: N }, (_, i) => -78 + (156 * i) / (N - 1));
+angles.sort((a, b) => Math.abs(b) - Math.abs(a));
+
+const feathers = angles.map((a) => {
+	const th = a * deg;
+	const bx = baseR * Math.sin(th);
+	const by = baseY + baseRy * Math.cos(th);
+	const tx = rimR * Math.sin(th);
+	const ty = rimY + rimRy * Math.cos(th);
+	const len = Math.hypot(tx - bx, ty - by);
+	const dx = (tx - bx) / len;
+	const dy = (ty - by) / len;
+	const hb = 2.6 * Math.cos(th) + 0.8;
+	const ht = 7.2 * Math.cos(th) + 1.4;
+	const cap = 7;
+	const d = [
+		`M${f2(bx - hb)} ${f2(by)}`,
+		`L${f2(tx - ht)} ${f2(ty)}`,
+		`Q${f2(tx - ht + dx * cap)} ${f2(ty + dy * cap)} ${f2(tx + dx * cap)} ${f2(ty + dy * cap)}`,
+		`Q${f2(tx + ht + dx * cap)} ${f2(ty + dy * cap)} ${f2(tx + ht)} ${f2(ty)}`,
+		`L${f2(bx + hb)} ${f2(by)}Z`,
+	].join(" ");
+	const shaft = `M${f2(bx)} ${f2(by)}L${f2(tx + dx * (cap - 2))} ${f2(ty + dy * (cap - 2))}`;
+	const shade = Math.round(255 - 22 * Math.abs(Math.sin(th)));
+	return { d, shaft, fill: `rgb(${shade},${shade},${Math.min(255, shade + 3)})` };
+});
+
+// tips of the back feathers, peeking above the far side of the rim
+const backTips = Array.from({ length: 6 }, (_, i) => {
+	const th = (-62 + (124 * i) / 5) * deg;
+	const x = rimR * Math.sin(th);
+	const y = rimY - rimRy * Math.cos(th);
+	const w = 5.2 * Math.cos(th) + 1.6;
+	return `M${f2(x - w)} ${f2(y + 2)}Q${f2(x - w)} ${f2(y - 6)} ${f2(x)} ${f2(y - 6.5)}Q${f2(x + w)} ${f2(y - 6)} ${f2(x + w)} ${f2(y + 2)}Z`;
+});
+
+// one thread ring around the skirt, as the near half of an ellipse
+const ring = (u: number, shift = 0) => {
+	const y = baseY + u * (rimY - baseY) + shift;
+	const r = baseR + u * (rimR - baseR);
+	const ry = baseRy + u * (rimRy - baseRy);
+	return `M${f2(-r)} ${f2(y)}A${f2(r)} ${f2(ry)} 0 0 0 ${f2(r)} ${f2(y)}`;
+};
+---
+
+<g transform={transform} opacity={opacity}>
+	<defs>
+		<linearGradient id={`cork-${uid}`} x1="0" x2="1" y1="0" y2="0">
+			<stop offset="0" stop-color="#b98f57"></stop>
+			<stop offset="0.38" stop-color="#f2e4c4"></stop>
+			<stop offset="0.7" stop-color="#e2c998"></stop>
+			<stop offset="1" stop-color="#a87f49"></stop>
+		</linearGradient>
+		<radialGradient id={`mouth-${uid}`} cx="0.5" cy="0.6" r="0.6">
+			<stop offset="0" stop-color="#cfd6df"></stop>
+			<stop offset="1" stop-color="#eef1f5"></stop>
+		</radialGradient>
+	</defs>
+	{backTips.map((d) => <path d={d} fill="#f4f6f8" stroke="#c3ccd7" stroke-width="0.7" />)}
+	<ellipse cx="0" cy={rimY} rx={rimR} ry={rimRy} fill={`url(#mouth-${uid})`} stroke="#c3ccd7" stroke-width="0.7"></ellipse>
+	{
+		feathers.map((p) => (
+			<g>
+				<path d={p.d} fill={p.fill} stroke="#b9c3cf" stroke-width="0.7" stroke-linejoin="round" />
+				<path d={p.shaft} stroke="#d3dae3" stroke-width="0.7" fill="none" />
+			</g>
+		))
+	}
+	<path d={ring(0.3)} stroke="#64748b" stroke-width="1.1" fill="none"></path>
+	<path d={ring(0.3, 1.8)} stroke="#94a3b8" stroke-width="0.7" fill="none"></path>
+	<path d={ring(0.6)} stroke="#64748b" stroke-width="1.1" fill="none"></path>
+	<path d="M-13 30A13 13 0 0 0 13 30V22H-13Z" fill={`url(#cork-${uid})`} stroke="#9a7442" stroke-width="0.8"></path>
+	<rect x="-13" y="21.5" width="26" height="3.6" fill="#00a86b"></rect>
+</g>

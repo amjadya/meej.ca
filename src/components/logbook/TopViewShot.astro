@@ -1,0 +1,270 @@
+---
+// top view of the court (bwf dimensions, same layout as CourtArea) with one shot's path along the floor from the spot
+// under the start point (x 1.525, z 12.40). the shot is the one in the shot plane figure: v0 = 18 m/s, t = 30 degrees,
+// p = 10 degrees, landing at s_f = 8.0 m (x 2.92, z 4.51), from the rk4 flight there.
+// show="net": the right triangle from the start to the net, 5.70 m along z, s_net along the heading.
+// show="land": the landing point split into its z and x steps, with the edges of the robot's half marked.
+// show="psi": the widest headings, to the two corners of the strip at the net (tan p = 1.525 / 5.70, p = 15.0 degrees),
+// and a 20 degree heading that leaves the strip at x = 3.05 before the net (z = 12.40 - 1.525 / tan 20 = 8.21).
+interface Props {
+	show: "net" | "land" | "psi";
+}
+const { show } = Astro.props;
+const L = 13.4;
+const WD = 6.1;
+const NET = L / 2;
+const half = WD / 2;
+const W = 680;
+const s = 44;
+const ox = (W - L * s) / 2;
+const oy = 46;
+const HT = oy + WD * s + 58;
+// screen: z runs left to right, x runs up from the bottom edge
+const sx = (z: number) => ox + z * s;
+const sy = (x: number) => oy + (WD - x) * s;
+const f = (n: number) => n.toFixed(1);
+
+const X0 = 1.525;
+const Z0 = 12.4;
+const PSI = (10 * Math.PI) / 180;
+const SF = 8.01;
+const sNet = (Z0 - NET) / Math.cos(PSI);
+const xNet = X0 + sNet * Math.sin(PSI);
+const xLand = X0 + SF * Math.sin(PSI);
+const zLand = Z0 - SF * Math.cos(PSI);
+
+const sOff = (WD - 5.18) / 2;
+const short = 1.98;
+const longD = 0.76;
+const N = 24;
+const arcR = 2.2;
+const arc = Array.from({ length: N + 1 }, (_, i) => {
+	const a = (PSI * i) / N;
+	return `${i ? "L" : "M"}${f(sx(Z0 - arcR * Math.cos(a)))} ${f(sy(X0 + arcR * Math.sin(a)))}`;
+}).join("");
+const am = PSI / 2;
+const sqz = NET;
+const sqx = X0;
+const sq = 10;
+const zOut = Z0 - X0 / Math.tan((20 * Math.PI) / 180);
+const wedge = `${sx(Z0)},${sy(X0)} ${sx(NET)},${sy(half)} ${sx(NET)},${sy(0)}`;
+---
+
+<div class="tvs not-prose">
+	<svg viewBox={`0 0 ${W} ${HT}`} role="img" aria-label={show === "net"
+		? "Top view of the court. From the spot under the start point, the net is 5.70 m away along Z. The shot heads off at angle psi, so its distance along the floor to the net is the long side of a right triangle, 5.70 divided by cos psi."
+		: show === "psi"
+		? "Top view of the court. From the start point in the middle of the robot's strip, the widest headings that still reach the net inside the strip go to its two corners at the net, at plus and minus 15 degrees. A 20 degree heading leaves the strip before the net."
+		: "Top view of the court. The shot lands s_f along its heading from the spot under the start point: s_f cos psi toward the robot along Z and s_f sin psi across in X. The robot's half runs from X = 0 to 3.05 and Z = 0 to 6.70."}>
+		<rect x={sx(0)} y={sy(half)} width={NET * s} height={half * s} class="robot"></rect>
+		<rect x={sx(NET)} y={sy(half)} width={NET * s} height={half * s} class="me"></rect>
+		<rect x={sx(0)} y={sy(WD)} width={L * s} height={WD * s} class="ln"></rect>
+		<line x1={sx(0)} y1={sy(sOff)} x2={sx(L)} y2={sy(sOff)} class="ln"></line>
+		<line x1={sx(0)} y1={sy(WD - sOff)} x2={sx(L)} y2={sy(WD - sOff)} class="ln"></line>
+		<line x1={sx(NET - short)} y1={sy(0)} x2={sx(NET - short)} y2={sy(WD)} class="ln"></line>
+		<line x1={sx(NET + short)} y1={sy(0)} x2={sx(NET + short)} y2={sy(WD)} class="ln"></line>
+		<line x1={sx(longD)} y1={sy(0)} x2={sx(longD)} y2={sy(WD)} class="ln"></line>
+		<line x1={sx(L - longD)} y1={sy(0)} x2={sx(L - longD)} y2={sy(WD)} class="ln"></line>
+		<line x1={sx(0)} y1={sy(half)} x2={sx(NET - short)} y2={sy(half)} class="ln"></line>
+		<line x1={sx(NET + short)} y1={sy(half)} x2={sx(L)} y2={sy(half)} class="ln"></line>
+		<line x1={sx(NET)} y1={sy(WD) - 8} x2={sx(NET)} y2={sy(0) + 8} class="net"></line>
+		<text x={sx(NET)} y={sy(WD) - 14} class="sm" text-anchor="middle">net, Z = 6.70</text>
+		<text x={sx(NET / 2)} y={sy(half / 2) + 5} class="tag" text-anchor="middle">robot</text>
+		<text x={sx(NET + NET / 2) + 40} y={sy(half / 2) + 52} class="tag" text-anchor="middle">me</text>
+
+		{show === "net" && (
+			<g>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(NET)} y2={sy(X0)} class="adj"></line>
+				<text x={sx((Z0 + NET) / 2)} y={sy(X0) + 22} class="dimt" text-anchor="middle">12.40 − 6.70 = 5.70 m</text>
+				<line x1={sx(NET)} y1={sy(X0)} x2={sx(NET)} y2={sy(xNet)} class="opp"></line>
+				<path d={`M${sx(sqz) + sq} ${sy(sqx)}V${sy(sqx) - sq}H${sx(sqz)}`} class="sq"></path>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(NET)} y2={sy(xNet)} class="hyp"></line>
+				<text x={sx((Z0 + NET) / 2) + 8} y={sy((X0 + xNet) / 2) - 12} class="key" text-anchor="middle">s<tspan class="sub" dy="5">net</tspan></text>
+				<circle cx={sx(NET)} cy={sy(xNet)} r="4.5" class="dot"></circle>
+			</g>
+		)}
+
+		{show === "land" && (
+			<g>
+				<rect x={sx(0)} y={sy(half)} width={NET * s} height={half * s} class="box"></rect>
+				<text x={sx(0) - 6} y={sy(0) + 5} class="edge" text-anchor="end">X = 0</text>
+				<text x={sx(0) - 6} y={sy(half) + 5} class="edge" text-anchor="end">3.05</text>
+				<text x={sx(0)} y={sy(0) + 24} class="edge" text-anchor="middle">Z = 0</text>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(zLand)} y2={sy(X0)} class="zs"></line>
+				<text x={sx((Z0 + zLand) / 2) + 40} y={sy(X0) + 22} class="dimt zt" text-anchor="middle">s<tspan class="sub" dy="4">f</tspan><tspan dy="-4"> cos ψ</tspan></text>
+				<line x1={sx(zLand)} y1={sy(X0)} x2={sx(zLand)} y2={sy(xLand)} class="xs"></line>
+				<text x={sx(zLand) - 8} y={sy((X0 + xLand) / 2) + 5} class="dimt xt" text-anchor="end">s<tspan class="sub" dy="4">f</tspan><tspan dy="-4"> sin ψ</tspan></text>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(zLand)} y2={sy(xLand)} class="hyp"></line>
+				<text x={sx((Z0 + zLand) / 2) + 20} y={sy((X0 + xLand) / 2) - 12} class="key" text-anchor="middle">s<tspan class="sub" dy="5">f</tspan></text>
+				<circle cx={sx(zLand)} cy={sy(xLand)} r="5" class="dot"></circle>
+				<text x={sx(zLand)} y={sy(xLand) - 12} class="sm" text-anchor="middle">lands</text>
+			</g>
+		)}
+
+		{show === "psi" && (
+			<g>
+				<polygon points={wedge} class="wedge"></polygon>
+				<rect x={sx(0)} y={sy(half)} width={L * s} height={half * s} class="box"></rect>
+				<text x={sx(0) + 6} y={sy(half) - 6} class="edge">X = 3.05</text>
+				<text x={sx(0) + 6} y={sy(0) - 6} class="edge">X = 0</text>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(NET)} y2={sy(X0)} class="adj"></line>
+				<text x={sx(NET) + 34} y={sy(X0) + 18} class="sm" text-anchor="middle">ψ = 0</text>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(NET)} y2={sy(half)} class="hyp"></line>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(NET)} y2={sy(0)} class="hyp"></line>
+				<text x={sx((Z0 + NET) / 2)} y={sy((X0 + half) / 2) + 22} class="key" text-anchor="middle">+15°</text>
+				<text x={sx((Z0 + NET) / 2)} y={sy(X0 / 2) - 8} class="key" text-anchor="middle">−15°</text>
+				<line x1={sx(NET) - 14} y1={sy(X0)} x2={sx(NET) - 14} y2={sy(half)} class="dimln"></line>
+				<text x={sx(NET) - 20} y={sy((X0 + half) / 2) + 5} class="dimt" text-anchor="end">1.525 m</text>
+				<line x1={sx(Z0)} y1={sy(X0)} x2={sx(zOut)} y2={sy(half)} class="out"></line>
+				<line x1={sx(zOut)} y1={sy(half)} x2={sx(zOut - 1.2)} y2={sy(half + 1.2 * Math.tan((20 * Math.PI) / 180))} class="out outx"></line>
+				<text x={sx(10.2)} y={sy(half) - 34} class="sm" text-anchor="middle">20°: leaves the strip before the net</text>
+			</g>
+		)}
+		{show !== "psi" && <path d={arc} class="arc"></path>}
+		{show !== "psi" && <text x={f(sx(Z0 - (arcR + 0.45) * Math.cos(am)))} y={f(sy(X0 + (arcR + 0.45) * Math.sin(am)) + 6)} class="ang" text-anchor="middle">ψ</text>}
+		<circle cx={sx(Z0)} cy={sy(X0)} r="5.5" class="start"></circle>
+		<text x={sx(Z0) + 10} y={sy(X0) + 20} class="sm" text-anchor="start">under P₁</text>
+	</svg>
+</div>
+
+<style is:global>
+	.tvs {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.tvs svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+	.tvs text {
+		paint-order: stroke;
+		stroke: #fff;
+		stroke-width: 4px;
+		stroke-linejoin: round;
+	}
+	.tvs .ln {
+		fill: none;
+		stroke: #cbd5e1;
+		stroke-width: 1.2;
+	}
+	.tvs .robot {
+		fill: rgba(37, 99, 235, 0.08);
+	}
+	.tvs .me {
+		fill: rgba(217, 119, 6, 0.09);
+	}
+	.tvs .box {
+		fill: none;
+		stroke: #2563eb;
+		stroke-width: 2;
+		stroke-dasharray: 6 4;
+	}
+	.tvs .net {
+		stroke: #334155;
+		stroke-width: 3;
+	}
+	.tvs .adj {
+		stroke: #64748b;
+		stroke-width: 2;
+		stroke-dasharray: 6 4;
+	}
+	.tvs .opp {
+		stroke: #94a3b8;
+		stroke-width: 1.5;
+	}
+	.tvs .sq {
+		fill: none;
+		stroke: #64748b;
+		stroke-width: 1.2;
+	}
+	.tvs .hyp {
+		stroke: #7c3aed;
+		stroke-width: 3;
+	}
+	.tvs .zs {
+		stroke: #2563eb;
+		stroke-width: 2.5;
+		stroke-dasharray: 6 4;
+	}
+	.tvs .xs {
+		stroke: #dc2626;
+		stroke-width: 2.5;
+		stroke-dasharray: 6 4;
+	}
+	.tvs .wedge {
+		fill: rgba(124, 58, 237, 0.1);
+	}
+	.tvs .dimln {
+		stroke: #334155;
+		stroke-width: 1.2;
+	}
+	.tvs .out {
+		stroke: #b91c1c;
+		stroke-width: 2;
+		stroke-dasharray: 5 4;
+	}
+	.tvs .outx {
+		opacity: 0.45;
+	}
+	.tvs .arc {
+		fill: none;
+		stroke: #7c3aed;
+		stroke-width: 1.8;
+	}
+	.tvs .ang {
+		font: 600 18px "Work Sans", sans-serif;
+		fill: #7c3aed;
+	}
+	.tvs .start {
+		fill: #f59e0b;
+		stroke: #fff;
+		stroke-width: 1.5;
+	}
+	.tvs .dot {
+		fill: #d97706;
+		stroke: #fff;
+		stroke-width: 1.5;
+	}
+	.tvs .key {
+		font: 700 17px "Work Sans", sans-serif;
+		fill: #7c3aed;
+	}
+	.tvs .sub {
+		font-size: 12px;
+	}
+	.tvs .dimt {
+		font: 600 14px "Work Sans", sans-serif;
+		fill: #334155;
+	}
+	.tvs .zt {
+		fill: #2563eb;
+	}
+	.tvs .xt {
+		fill: #dc2626;
+	}
+	.tvs .edge {
+		font: 600 13px "Work Sans", sans-serif;
+		fill: #2563eb;
+	}
+	.tvs .sm {
+		font: 13px "Work Sans", sans-serif;
+		fill: #475569;
+	}
+	.tvs .tag {
+		font: 600 13px "Work Sans", sans-serif;
+		fill: #64748b;
+	}
+	@media (max-width: 560px) {
+		.tvs {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 8px 12px;
+		}
+	}
+</style>

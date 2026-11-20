@@ -1,0 +1,580 @@
+---
+title: Camera placement
+date: 2026-11-19
+summary: "Figuring out the best extrinsic settings for our cameras on the court."
+tags: [Stereo Vision]
+draft: false
+---
+
+import Figure from "../../../components/logbook/Figure.astro";
+import ClearSideView from "../../../components/logbook/ClearSideView.astro";
+import FovOrientation from "../../../components/logbook/FovOrientation.astro";
+import CourtArea from "../../../components/logbook/CourtArea.astro";
+import TrajectoryExplorer from "../../../components/logbook/TrajectoryExplorer.astro";
+import LaunchVelocity from "../../../components/logbook/LaunchVelocity.astro";
+import ShotPlane from "../../../components/logbook/ShotPlane.astro";
+import Reveal from "../../../components/logbook/Reveal.astro";
+import TopViewShot from "../../../components/logbook/TopViewShot.astro";
+import CameraRig from "../../../components/logbook/CameraRig.astro";
+import RigOffset from "../../../components/logbook/RigOffset.astro";
+import { Image } from "astro:assets";
+import calibrationFrame from "../../../assets/logbook/baddy-bot/calibration-charuco-left-10.jpg";
+import oneCamHeatmap from "../../../assets/logbook/baddy-bot/placement-one-camera.png";
+
+## What I'm trying to achieve
+
+The goal is to figure out the optimal placement of the cameras relative to the court (and each other) such that they can see the most area possible.
+
+The assumptions are:
+
+- We can mount the cameras as high or as low as we want.
+- We can yaw, pitch and roll the cameras relative to each other and the court as much as we'd like.
+- We have about 2.5 m of baseline behind the court to place our cameras.
+- We can change the distance between the cameras as we wish.
+
+Figure 1 below is an animated side view of what a clear looks like. We need to find a configuration of the cameras which captures the most of this arc, so that we get as much information about the trajectory of the birdie as possible.
+
+<Figure n={1} caption="A side view of the badminton court, and what a clear looks like.">
+  <ClearSideView />
+</Figure>
+
+Something we still don't fully know is the best place to put the cameras: whether it's on the robot side or the other player's side is still up for debate. If it's on the other player's side, our best data happens closer to the camera. If it's on the robot side, our best data happens when the trajectory is closer to its end.
+
+Intuitively, I believe it's better to have the cameras on the robot side, because we can use the frames from further away to give the robot a general guide on where to go, and then use the frames that are closer by for more precise motion as the birdie approaches. This remains to be confirmed. We're going to assume that the cameras are on the robot side, facing downwards towards the other player.
+
+As a reminder, clears take around 2.5 seconds to hit the ground, which means the robot has that much time to travel and intercept the birdie.
+
+## Quantifying performance
+
+Given a trajectory, we want to optimise for the number of frames in which we can see the full thing.
+
+We also need to make sure the camera can see every part of the floor that the robot can drive to (the 3 x 6 m section of the court). It should also be able to see the robot clearly enough so that it can localise it.
+
+### The field of view
+
+Based on our camera specs for the <a href="https://www.edmundoptics.com/p/bfs-u3-23s3c-c-usb3-blackflyreg-s-color-camera/41347/" target="_blank" rel="noopener noreferrer">BFS-U3-23S3C-C</a> with our 8 mm lens, the FOV is 45.0° by 29.0°.
+
+When we did calibration on our own, the FOV came out to be [44.9°, 29.0°]. 44.9° is the horizontal FOV, and 29.0° is the vertical FOV.
+
+<Figure n={2} caption="One of the frames from our ChArUco board calibration.">
+  <Image src={calibrationFrame} alt="The ChArUco calibration board held up in front of the camera in the lab." />
+</Figure>
+
+Here is the court area that we are interested in, for reference.
+
+<Figure n={3} caption="The court area that we are operating with for the scope of this project.">
+  <CourtArea />
+</Figure>
+
+Naturally, since all we care about is a 3 x 6 m section, we are going to rotate the cameras, almost like you would rotate your phone from landscape to portrait when taking a picture of a person. We don't want a wide FOV, we want a tall one.
+
+<Figure n={4} caption="A top view and a side view of one camera's FOV, in landscape and in portrait.">
+  <FovOrientation />
+</Figure>
+
+### Trajectories
+
+Equation:
+
+$$
+\frac{d\mathbf{v}}{dt} = -g\,\hat{\mathbf{y}} - \alpha\,\lVert\mathbf{v}\rVert\,\mathbf{v}, \qquad \alpha = 0.215\ \text{m}^{-1},\quad g = 9.81\ \text{m/s}^2
+$$
+
+Using this equation for the acceleration of the birdie, which we got from <a href="https://www.jssm.org/jssm-08-657.xml-Fulltext" target="_blank" rel="noopener noreferrer">this paper</a>, we are going to run many trajectories with many different initial velocities, starting from one spot. We are forcing each of these trajectories to meet the constraints we described at the very start of this entry, as well as to cross the net. This way we have a workable set of trajectories.
+
+To simplify things, we are making sure that we start the trajectories from the same spot on the "me" side.
+
+<Figure n={5} caption="The spot on the me side that every trajectory starts from.">
+  <CourtArea start />
+</Figure>
+
+<Figure n={6} caption="Launch speed and angle from the start spot.">
+  <TrajectoryExplorer />
+</Figure>
+
+### Getting the trajectories in 3D
+
+Here are the requirements for the trajectories explicitly:
+
+- Must have a max height of 7 m or below.
+- Must stay within the half courts in Figure 3, and land in the robot's half (3.05 x 6.70 m).
+- Starts from the same point.
+- Must be above the net (1.55 m) when it crosses it.
+
+#### Introducing the math
+
+The court frame is as follows:
+
+- $X$ across the width of the court
+- $Y$ up
+- $Z$ towards the net
+
+See the figure below.
+
+<Figure n={7} caption="The court frame, the birdie at the start point, and its launch velocity v(0) split into its X, Y and Z parts.">
+  <LaunchVelocity />
+</Figure>
+
+The birdie's start point is always going to be either
+
+$$
+P_1 = (1.525,\ 2.6,\ 12.40)\ \text{m} \quad \text{(overhead clear)}
+$$
+
+$$
+P_2 = (1.525,\ 1.1,\ 12.40)\ \text{m} \quad \text{(serve)}
+$$
+
+We can write the initial velocity as a function of its magnitude (how hard it was hit), $v_0$, and the angle $\theta$ pointing up from the ground and $\psi$ pointing right or left from the $Z$ axis:
+
+$$
+\mathbf{v}(0) = v_0\,(\cos\theta\sin\psi,\ \sin\theta,\ -\cos\theta\cos\psi)
+$$
+
+#### Equations of motion
+
+Here are the equations of motion from above, written out for each axis:
+
+$$
+\dot v_x = -\alpha\lVert\mathbf{v}\rVert v_x, \qquad
+\dot v_y = -g - \alpha\lVert\mathbf{v}\rVert v_y, \qquad
+\dot v_z = -\alpha\lVert\mathbf{v}\rVert v_z
+$$
+
+where
+
+$$
+\lVert\mathbf{v}\rVert = \sqrt{v_x^2 + v_y^2 + v_z^2}
+$$
+
+And we can set $P_1$ or $P_2$ at $\mathbf{v}(0)$.
+
+#### Massaging the equations
+
+Take the $X$ and $Z$ equations:
+
+$$
+\frac{d}{dt}\left(\frac{v_x}{v_z}\right) = \frac{v_z\dot v_x - v_x\dot v_z}{v_z^2} = \frac{-\alpha\lVert\mathbf{v}\rVert v_z v_x + \alpha\lVert\mathbf{v}\rVert v_x v_z}{v_z^2} = 0
+$$
+
+This means that the motion stays in one plane.
+
+<Reveal label="Learn more">
+
+$v_x / v_z$ is the direction the birdie is heading along the floor. Think rise over run. If rise over run doesn't change, the heading stays the same, meaning the motion is in one plane.
+
+</Reveal>
+
+We can use this to our advantage and reduce three equations of motion into two. Let's call a new variable $s$ the distance along the floor in the heading direction and $h$ the height.
+
+<Figure n={8} caption="The plane one shot flies in, with s along the floor and h up.">
+  <ShotPlane />
+</Figure>
+
+$\dot s$ is the birdie's speed along the floor in the heading direction. This is equal to
+
+$$
+\dot s = \sqrt{v_x^2 + v_z^2}
+$$
+
+and $\dot h$ is how fast it is going up:
+
+$$
+\dot h = v_y
+$$
+
+Let's take a look at the equations of motion again. They're describing accelerations, so let's see what happens when we take the second derivative of $s$ and $h$ respectively.
+
+For $h$, since $\dot h = v_y$, its second derivative is just the $Y$ equation:
+
+$$
+\begin{aligned}
+\ddot h &= \dot v_y \\
+&= -g - \alpha\lVert\mathbf{v}\rVert\,v_y \\
+&= -g - \alpha\lVert\mathbf{v}\rVert\,\dot h
+\end{aligned}
+$$
+
+For $s$, we take the derivative of $\dot s = \sqrt{v_x^2 + v_z^2}$ with the chain rule:
+
+$$
+\ddot s = \frac{1}{2\sqrt{v_x^2 + v_z^2}}\left(2v_x\dot v_x + 2v_z\dot v_z\right)
+$$
+
+Simplify:
+
+$$
+\ddot s = \frac{v_x\dot v_x + v_z\dot v_z}{\dot s}
+$$
+
+Then substitute $\dot v_x$ and $\dot v_z$ from the $X$ and $Z$ equations:
+
+$$
+\ddot s = \frac{v_x\left(-\alpha\lVert\mathbf{v}\rVert\,v_x\right) + v_z\left(-\alpha\lVert\mathbf{v}\rVert\,v_z\right)}{\dot s} = -\alpha\lVert\mathbf{v}\rVert\,\frac{v_x^2 + v_z^2}{\dot s}
+$$
+
+Leaving us with (since $v_x^2 + v_z^2 = \dot s^2$):
+
+$$
+\ddot s = -\alpha\lVert\mathbf{v}\rVert\,\dot s
+$$
+
+The magnitude of $\mathbf{v}$ can also be written in terms of $\dot s$ and $\dot h$:
+
+$$
+\lVert\mathbf{v}\rVert = \sqrt{v_x^2 + v_z^2 + v_y^2} = \sqrt{\dot s^2 + \dot h^2}
+$$
+
+Now we have simplified the three equations into two. We started with
+
+$$
+\dot v_x = -\alpha\lVert\mathbf{v}\rVert v_x, \qquad
+\dot v_y = -g - \alpha\lVert\mathbf{v}\rVert v_y, \qquad
+\dot v_z = -\alpha\lVert\mathbf{v}\rVert v_z
+$$
+
+and now all we have is
+
+$$
+\ddot s = -\alpha\sqrt{\dot s^2 + \dot h^2}\,\dot s, \qquad
+\ddot h = -g - \alpha\sqrt{\dot s^2 + \dot h^2}\,\dot h
+$$
+
+with the constraints
+
+$$
+\begin{aligned}
+s(0) &= 0 \\
+h(0) &= 2.6\ \text{m}\ (P_1)\ \text{or}\ 1.1\ \text{m}\ (P_2) \\
+\dot s(0) &= v_0\cos\theta \\
+\dot h(0) &= v_0\sin\theta
+\end{aligned}
+$$
+
+This means at any given moment, the birdie's position is
+
+$$
+\begin{aligned}
+X(t) &= 1.525 + s(t)\sin\psi \\
+Y(t) &= h(t) \\
+Z(t) &= 12.40 - s(t)\cos\psi
+\end{aligned}
+$$
+
+We can use RK4 (like in our badminton bot prediction system in the repository) with a floor at $h = 0$ to project the trajectory forward from the starting position.
+
+Let's introduce $s_f$ as the final distance along the floor, and $h_p$ as the peak height.
+
+#### Enforcing requirements
+
+Let's go through each one step by step.
+
+For max height, this one's pretty obvious:
+
+$$
+h_p \le 7\ \text{m}
+$$
+
+For the net, if the trajectory crossed the net, it would have reached a $Z$ value of 6.70 m. Our starting position is 12.40 m in $Z$ and the net is at 6.70 m, which means it's 5.70 m away along $Z$. With an angle $\psi$:
+
+$$
+\cos\psi = \frac{5.70}{s_\text{net}} \quad\Rightarrow\quad s_\text{net} = \frac{5.70}{\cos\psi}
+$$
+
+<Figure n={9} caption="Top view: the distance along the floor from the start to the net.">
+  <TopViewShot show="net" />
+</Figure>
+
+This isn't a constraint. This is just giving us the value for $s_\text{net}$. The actual constraint is that we check the height at $s_\text{net}$ is greater than or equal to the net:
+
+$$
+h(s_\text{net}) \ge 1.55\ \text{m}
+$$
+
+For landing in the robot's half, we have $X$ and $Z$ from before, at the landing:
+
+$$
+X = 1.525 + s_f\sin\psi, \qquad Z = 12.40 - s_f\cos\psi
+$$
+
+<Figure n={10} caption="Top view: where the shot lands, split into its Z and X parts, with the robot's half outlined.">
+  <TopViewShot show="land" />
+</Figure>
+
+We limit $s_f$ and $\psi$ such that in $X$ they're restricted to 0 and 3.05, and in $Z$ they're restricted to 0 and 6.70:
+
+$$
+0 \le 1.525 + s_f\sin\psi \le 3.05, \qquad 0 \le 12.40 - s_f\cos\psi \le 6.70
+$$
+
+#### Computing the set
+
+Here are the equations of motion that we created earlier:
+
+$$
+\ddot s = -\alpha\sqrt{\dot s^2 + \dot h^2}\,\dot s, \qquad
+\ddot h = -g - \alpha\sqrt{\dot s^2 + \dot h^2}\,\dot h
+$$
+
+$$
+\begin{aligned}
+s(0) &= 0 \\
+h(0) &= 2.6\ \text{m}\ (P_1)\ \text{or}\ 1.1\ \text{m}\ (P_2) \\
+\dot s(0) &= v_0\cos\theta \\
+\dot h(0) &= v_0\sin\theta
+\end{aligned}
+$$
+
+Here are the constraints that they have to face:
+
+$$
+\begin{aligned}
+h_p &\le 7\ \text{m} \\
+h(s_\text{net}) &\ge 1.55\ \text{m}, \qquad s_\text{net} = \frac{5.70}{\cos\psi} \\
+0 \le 1.525 + s_f\sin\psi &\le 3.05 \\
+0 \le 12.40 - s_f\cos\psi &\le 6.70
+\end{aligned}
+$$
+
+There is also a constraint on $\psi$.
+
+<Figure n={11} caption="Top view: the widest headings, to the two corners of the strip at the net. Anything wider leaves the strip before the net.">
+  <TopViewShot show="psi" />
+</Figure>
+
+From the diagram above, it should be easy to conclude that $\psi$ must be constrained to $-15°$ and $+15°$ if it is to stay within the zone:
+
+$$
+\tan\psi = \frac{1.525}{5.70} \quad\Rightarrow\quad \psi = \arctan\left(\frac{1.525}{5.70}\right) = 15.0°
+$$
+
+Therefore,
+
+$$
+-15° \le \psi \le 15°
+$$
+
+
+##### The cameras
+
+The camera baseline $B$ is constrained to
+
+$$
+0.2\ \text{m} \le B \le 2\ \text{m}
+$$
+
+The yaw is mirrored:
+
+$$
+\gamma_1 = \gamma, \qquad \gamma_2 = -\gamma, \qquad 0° \le \gamma \le 90°
+$$
+
+They're pitched the same amount $\beta$, where $\beta > 0$ tilts up:
+
+$$
+\beta_1 = \beta_2 = \beta, \qquad -90° \le \beta \le 90°
+$$
+
+The roll is either landscape or portrait:
+
+$$
+\rho_i \in \{0°\ \text{(landscape)},\ 90°\ \text{(portrait)}\}
+$$
+
+We can choose any orientation for them relative to each other. With camera 1 at $\mathbf{c}_1$, camera 2 sits at
+
+$$
+\mathbf{c}_2 = \mathbf{c}_1 + B\,(\cos\epsilon\cos\lambda,\ \sin\epsilon,\ \cos\epsilon\sin\lambda)
+$$
+
+They can be offset forwards and backwards, which is the angle $\lambda$:
+
+<Figure n={12} caption="Top view: camera 2 swung around camera 1 along the floor by λ, here 40°.">
+  <RigOffset show="lambda" />
+</Figure>
+
+$$
+-90° \le \lambda \le 90°
+$$
+
+or placed stacked on top of each other, which is the angle $\epsilon$:
+
+<Figure n={13} caption="From behind the rig: camera 2 lifted above camera 1 by ε, here 35°, drawn with λ = 0.">
+  <RigOffset show="epsilon" />
+</Figure>
+
+$$
+-90° \le \epsilon \le 90°
+$$
+
+And both cameras sit in the space behind the robot's baseline:
+
+$$
+-2.5\ \text{m} \le z_i \le 0, \qquad y_i \ge 0
+$$
+
+<Figure n={14} caption="Interactive diagram showing how all the camera constraints play together. Drag the court to turn it.">
+  <CameraRig />
+</Figure>
+
+### Building the optimiser
+
+#### Generating the trajectory set
+
+A trajectory is set by choosing $v_0$, $\theta$, $\psi$ and the starting point ($P_1$ or $P_2$). We want to limit the amount of times we're using RK4 to forward project the trajectory, so we're going to worry about ways we can simplify generating the set.
+
+The following is a conversation I had with Claude about this. All the quotation blocks were Claude's questions to me, and everything afterward was my answer.
+
+> Which of $v_0$, $\theta$, $\psi$ and the start point change the 2D flight $s(t)$, $h(t)$? And which ones can we apply afterwards without flying again?
+
+We can worry about $\theta$ and $v_0$, and then sweep for $\psi$ for the ones that don't fail.
+
+> $P_1$ and $P_2$ differ only in height, 2.6 m against 1.1 m. Look at the starting values for the flight: $s(0) = 0$, $h(0) = 2.6$ or $1.1$, $\dot s(0) = v_0\cos\theta$, $\dot h(0) = v_0\sin\theta$. Does the start point need its own flights, or can it be applied afterwards like $\psi$?
+
+You need to have the start height to know the overall shape of the trajectory.
+
+> To check every $\psi$ later without flying again, what do we need to save from each flight?
+
+$s_f$. $s_f$ is how far along you travelled on the floor.
+
+> Does the peak height $h_p$ change with $\psi$?
+
+No, it shouldn't.
+
+> $s_\text{net}$ moves with $\psi$: it's 5.70 m at $\psi = 0$ and grows to $5.70 / \cos 15° \approx 5.90$ m at the widest heading. What do we need to save from a flight to check $h(s_\text{net}) \ge 1.55$ m for any $\psi$ in that range?
+
+You look at whatever $\theta$ you had noted, and you say: did it clear the net on all of its distances, 5.70 to 5.90 m?
+
+Claude then pushed back and said that all we care about is whether, at $s_\text{net}$, it was greater than the height of the net. So all we do is save each trajectory's height between 5.70 and 5.90 m, and then later, for every sweep across $\psi$, we check if $h(s_\text{net})$ is greater than 1.55 m in that range.
+
+With that, we're ready to actually start coding this.
+
+The script is in our repository at `vision/analysis/trajectory_set.py`.
+
+After running the code, we were able to generate this table, which represents the amount of valid shots within the constraints we set. In another column, I'm also introducing the trajectories that land within 1 m of what we're calling $P_\text{home}$.
+
+| Start | Valid (shot, $\psi$) pairs | Landing within 1 m of $P_\text{home}$ |
+| --- | --- | --- |
+| $P_1$, 2.6 m | 73,162 | 13,575 |
+| $P_2$, 1.1 m | 66,029 | 11,149 |
+
+$P_\text{home}$ is where the robot is going to be placed on the court:
+
+$$
+P_\text{home} = (1.525,\ 0,\ 3.35)\ \text{m}
+$$
+
+All in all, what we care about here are the 25,000 shots landing within the home zone.
+
+#### Scoring a placement
+
+First, we're going to make sure that we only use the camera conditions which see the entire home zone.
+
+We're also only considering the trajectories that land within this home zone for now, and we're going to optimise for the camera conditions within this subset which see the trajectories the most they can. For starters, we're going to weigh every point along the trajectory the same.
+
+Since some trajectories have more frames than others (they take longer to reach the ground), what we're looking for is the average fraction.
+
+##### One camera first
+
+Searching every camera setting at once is about a billion placements, so what we're going to do is look at one camera first, and then search a range of stereo cameras around that solution.
+
+| Setting | Range |
+| --- | --- |
+| Height | 0.5 to 5 m, in 0.1 m steps |
+| Distance behind the robot's baseline | 0 to 2.5 m, in 0.25 m steps |
+| Pitch | $-20°$ to $70°$, in 2° steps |
+| Roll | landscape or portrait |
+| Yaw | 0°, no need to sweep this since it's just one camera |
+
+Each placement is scored on a fifth of the shots that land in the home zone (4,945 shots). The script is `vision/analysis/placement_one_cam.py`.
+
+##### How low the camera can go
+
+You might have noticed I only started at 0.5 m. This is because we need to make sure the cameras have enough of an angle to be able to see the difference between the LEDs on the badminton robot. If the camera was at the same height as those LEDs, it would be difficult to tell depth apart (LEDs at the front would blend in with LEDs at the back of the robot).
+
+##### Results
+
+It turns out portrait was better than landscape every time. Here's a heat map comparing camera height to distance behind the robot, where the colour represents the average fraction of each shot in view (not shown in the heat map is the pitch).
+
+<Figure n={15} caption="One camera in portrait.">
+  <Image src={oneCamHeatmap} alt="Heatmap of camera height against distance behind the robot's baseline, coloured by the average fraction of each shot in view. The scores rise toward low and far back, and the best cell, starred, is 0.5 m high and 2.5 m back. Heights start at 0.5 m." />
+</Figure>
+
+| Roll | Height | Distance behind the baseline | Pitch | Score |
+| --- | --- | --- | --- | --- |
+| portrait | 0.50 m | 2.50 m | $+16°$ | 0.999 |
+| portrait | 0.50 m | 2.25 m | $+16°$ | 0.997 |
+| portrait | 0.70 m | 2.50 m | $+14°$ | 0.997 |
+| portrait | 0.60 m | 2.50 m | $+14°$ | 0.995 |
+
+The best camera placement is portrait, 0.5 m high, 2.5 m behind the robot's baseline, pitched up 16°. It sees 99.9% of the frames of each shot that lands in the home zone, on average. Many placements score close to 1, so we have a range of options.
+
+<Figure n={16} caption="The best camera placement, visualised.">
+  <CameraRig still one home values={{ mx: 1.525, my: 0.5, mz: 2.5, pt: 16, yw: 0 }} shot={[29.5, 46, 0, 2.6]} />
+</Figure>
+
+##### Two cameras
+
+Next, we run the two camera stage and find the complete orientation that gets the highest score. We're going to restrict the baseline to a 1 m max for now, to make sure that the cables have enough room to reach the laptop. If we get better cables, we can do a bigger baseline.
+
+| Setting | Range |
+| --- | --- |
+| Height of the rig centre | 0.5 to 1.5 m, in 0.1 m steps |
+| Distance behind the robot's baseline | 1.5 to 2.5 m, in 0.25 m steps |
+| Baseline $B$ | 0.2 to 1 m, in 0.1 m steps |
+| $\lambda$ | $-90°$ to $90°$, in 45° steps |
+| $\varepsilon$ | $-45°$ to $90°$, in 45° steps |
+| Yaw $\gamma$ | 0° to 10° in 2° steps, and 15° |
+| Pitch $\beta$ | 4° to 20°, in 2° steps |
+| Roll | portrait (from the one camera results) |
+
+*Step sizes were a little more aggressive and constraints were a little more tight than I wanted them to be, in the interest of time.*
+
+##### Results
+
+| Setting | Best |
+| --- | --- |
+| Height of the rig centre | 0.5 m |
+| Distance behind the robot's baseline | 2.5 m |
+| Baseline $B$ | 1 m |
+| $\lambda$ | 0° (side by side) |
+| $\varepsilon$ | 0° (level) |
+| Yaw $\gamma$ | 2° |
+| Pitch $\beta$ | $+16°$ |
+| Roll | portrait |
+| Score | 0.999 |
+| Depth error | 34 mm |
+
+<Figure n={17} caption="The best two camera placement, visualised.">
+  <CameraRig still home values={{ mx: 1.525, my: 0.5, mz: 2.5, b: 1, l: 0, e: 0, yw: 2, pt: 16 }} shot={[29.5, 46, 0, 2.6]} />
+</Figure>
+
+These were other options that we had, but I'm just going to go with the 0.5 m one for now and see how well it does. We can adjust in the future.
+
+| Height of the rig centre | Score | Depth error | Pitch $\beta$ |
+| --- | --- | --- | --- |
+| 0.5 m | 0.999 | 34 mm | $+16°$ |
+| 0.6 m | 0.995 | 34 mm | $+14°$ |
+| 0.7 m | 0.996 | 34 mm | $+14°$ |
+| 0.8 m | 0.990 | 41 mm | $+12°$ |
+| 0.9 m | 0.979 | 33 mm | $+10°$ |
+| 1.0 m | 0.983 | 32 mm | $+10°$ |
+| 1.2 m | 0.975 | 32 mm | $+8°$ |
+| 1.5 m | 0.950 | 30 mm | $+4°$ |
+
+## Driving questions
+
+1. What do I tell Steven to CAD up for the new mounts?
+2. How will I put the laptop on the mount so I can use my laptop as I get info?
+
+## Next
+
+I'M TELLING STEVEN TO BUILD A MOUNT WITH THE FOLLOWING SPECS:
+
+- Height: 0.5 m
+- Baseline: 1 m
+- Yawed inwards: 2°
+- Pitched upwards: 16°
+- Portrait
+
+We're now ready to go to the badminton court and do a full test of the stereo vision setup.

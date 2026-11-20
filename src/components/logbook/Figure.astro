@@ -1,0 +1,38 @@
+---
+// numbered figure with a short caption under whatever it wraps.
+interface Props {
+	n: number;
+	caption: string;
+}
+
+const { n, caption } = Astro.props;
+---
+
+<figure class="lbfig not-prose">
+	<slot />
+	<figcaption><span class="num">Figure {n}.</span> {caption}</figcaption>
+</figure>
+
+<style is:global>
+	.lbfig {
+		margin: 2rem auto 1.75rem;
+		text-align: center;
+	}
+	.lbfig > img,
+	.lbfig > picture img {
+		display: block;
+		max-width: 100%;
+		height: auto;
+		margin: 0 auto;
+	}
+	.lbfig figcaption {
+		margin-top: 10px;
+		font-size: 15px;
+		line-height: 1.5;
+		color: #64748b;
+	}
+	.lbfig figcaption .num {
+		font-weight: 600;
+		color: #475569;
+	}
+</style>

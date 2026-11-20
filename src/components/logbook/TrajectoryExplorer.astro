@@ -1,0 +1,386 @@
+---
+// pick a launch speed and angle from one fixed start spot and see where the shuttle goes, to scale.
+// equations of motion as in the badminton-bot repo (src/core/birdie_dynamics.cpp): dv/dt = -g y_hat - alpha |v| v,
+// alpha 0.215 per m, g 9.81 (config/ekf.yaml), rk4. start: 1 m inside my baseline, 2.6 m (overhead) or 1.1 m (serve) high, hit straight
+// down the court toward the robot. a shot is valid when it is above 1.55 m (the net at the posts) as it
+// passes the net, never goes above 7 m, and lands between the net and the robot's baseline. the map is every speed and angle on a
+// 0.5 m/s by 1 degree grid, flown at 4 ms steps; the drawn path is flown at 1 ms steps.
+import CourtAxes from "./CourtAxes.astro";
+const G = 9.81;
+const ALPHA = 0.215;
+const L = 13.4;
+const NETX = L / 2;
+const NETH = 1.55;
+const X0 = L - 1;
+const HMAX = 7;
+const HS = [2.6, 1.1];
+const VMIN = 5, VMAX = 60, VSTEP = 0.5;
+const AMIN = -30, AMAX = 85, ASTEP = 1;
+
+type S = [number, number, number, number];
+const deriv = ([, , vx, vy]: S): S => {
+	const sp = Math.hypot(vx, vy);
+	return [vx, vy, -ALPHA * sp * vx, -G - ALPHA * sp * vy];
+};
+const rk4 = (st: S, h: number): S => {
+	const k1 = deriv(st);
+	const k2 = deriv(st.map((v, i) => v + (h / 2) * k1[i]) as S);
+	const k3 = deriv(st.map((v, i) => v + (h / 2) * k2[i]) as S);
+	const k4 = deriv(st.map((v, i) => v + h * k3[i]) as S);
+	return st.map((v, i) => v + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])) as S;
+};
+const valid = (v0: number, deg: number, dt: number, h0: number) => {
+	const a = (deg * Math.PI) / 180;
+	let st: S = [X0, h0, -v0 * Math.cos(a), v0 * Math.sin(a)];
+	let crossed = false;
+	for (let t = 0; t < 8; t += dt) {
+		const nx = rk4(st, dt);
+		if (nx[1] > HMAX) return false;
+		if (!crossed && nx[0] <= NETX) {
+			const f = (st[0] - NETX) / (st[0] - nx[0]);
+			if (st[1] + f * (nx[1] - st[1]) < NETH) return false;
+			crossed = true;
+		}
+		if (nx[1] <= 0) {
+			const f = st[1] / (st[1] - nx[1]);
+			const lx = st[0] + f * (nx[0] - st[0]);
+			return crossed && lx >= 0;
+		}
+		st = nx;
+	}
+	return false;
+};
+
+// map geometry
+const MW = 560, MH = 250, ml = 70, mt = 14;
+const mx = (v: number) => ml + ((v - VMIN) / (VMAX - VMIN)) * MW;
+const my = (a: number) => mt + ((AMAX - a) / (AMAX - AMIN)) * MH;
+const cw = (VSTEP / (VMAX - VMIN)) * MW;
+const ch = (ASTEP / (AMAX - AMIN)) * MH;
+const regionFor = (h0: number) => {
+const runs: string[] = [];
+for (let a = AMIN; a <= AMAX; a += ASTEP) {
+	let start: number | null = null;
+	for (let v = VMIN; v <= VMAX + 1e-9; v += VSTEP) {
+		const ok = valid(v, a, 0.004, h0);
+		if (ok && start === null) start = v;
+		if ((!ok || v + VSTEP > VMAX + 1e-9) && start !== null) {
+			const end = ok ? v : v - VSTEP;
+			runs.push(`M${(mx(start) - cw / 2).toFixed(1)} ${(my(a) - ch / 2).toFixed(1)}h${(mx(end) - mx(start) + cw).toFixed(1)}v${ch.toFixed(2)}h${(-(mx(end) - mx(start) + cw)).toFixed(1)}z`);
+			start = null;
+		}
+	}
+}
+return runs.join("");
+};
+const regions = HS.map(regionFor);
+
+// side view geometry, to scale
+const W = 680, back = 1.5, top = 8, sl = 46;
+const s = (W - sl - 12) / (L + 2 * back);
+const sy0 = 14 + top * s;
+const px = (x: number) => sl + (x + back) * s;
+const py = (h: number) => sy0 - h * s;
+const SH = sy0 + 30;
+---
+
+<div class="tex not-prose" data-tex data-hs={HS.join(",")} data-hmax={HMAX} data-s={s} data-sl={sl} data-back={back} data-sy0={sy0}
+	data-ml={ml} data-mt={mt} data-mw={MW} data-mh={MH} data-v={`${VMIN},${VMAX}`} data-a={`${AMIN},${AMAX}`}>
+	<svg viewBox={`0 0 ${W} ${SH}`} class="side" role="img" aria-label="Side view of the court to scale with the path of the chosen shot from the start spot, 1 m inside my baseline at 2.6 m high.">
+		{Array.from({ length: top + 1 }, (_, i) => i).map((h) => (
+			<g>
+				<line x1={sl - 8} y1={py(h)} x2={sl - 3} y2={py(h)} class="axis"></line>
+				<text x={sl - 11} y={py(h) + 4} class="sm" text-anchor="end">{h}</text>
+			</g>
+		))}
+		<line x1={sl - 3} y1={py(0)} x2={sl - 3} y2={py(top)} class="axis"></line>
+		<text x="12" y={py(top / 2)} class="sm" text-anchor="middle" transform={`rotate(-90 12 ${py(top / 2)})`}>height (m)</text>
+		<rect x={px(0)} y={sy0 - 6} width={NETX * s} height="6" class="robot"></rect>
+		<rect x={px(NETX)} y={sy0 - 6} width={NETX * s} height="6" class="me"></rect>
+		<line x1={px(-back)} y1={sy0} x2={px(L + back)} y2={sy0} class="floor"></line>
+		<line x1={px(NETX)} y1={sy0} x2={px(NETX)} y2={py(NETH)} class="net"></line>
+		<line x1={px(-back)} y1={py(HMAX)} x2={px(L + back)} y2={py(HMAX)} class="cap"></line>
+		<text x={px(L + back) - 4} y={py(HMAX) - 6} class="sm" text-anchor="end">7 m max</text>
+		<CourtAxes x={px(0)} y={sy0} view="side" />
+		<text x={px(NETX / 2)} y={sy0 + 20} class="sm" text-anchor="middle">robot</text>
+		<text x={px(NETX + NETX / 2)} y={sy0 + 20} class="sm" text-anchor="middle">me</text>
+		<path d="" class="path" data-path></path>
+		<circle cx={px(X0)} cy={py(HS[0])} r="5" class="start" data-start></circle>
+	</svg>
+	<div class="tog" role="group" aria-label="where the shot is hit from">
+		<button type="button" data-h="0" aria-pressed="true">overhead clear, 2.6 m</button>
+		<button type="button" data-h="1" aria-pressed="false">serve, 1.1 m</button>
+	</div>
+	<p class="read" data-read></p>
+	<svg viewBox={`0 0 ${ml + MW + 16} ${mt + MH + 46}`} class="map" data-map role="img" aria-label="Map of launch speed against launch angle. The shaded region is every speed and angle from the start spot that clears the net, stays under 7 m and lands on the robot's side.">
+		<rect x={ml} y={mt} width={MW} height={MH} class="frame"></rect>
+		{regions.map((r, k) => <path d={r} class="ok" data-region={k} style={k ? "display:none" : ""}></path>)}
+		{[10, 20, 30, 40, 50, 60].map((v) => (
+			<g>
+				<line x1={mx(v)} y1={mt + MH} x2={mx(v)} y2={mt + MH + 5} class="axis"></line>
+				<text x={mx(v)} y={mt + MH + 19} class="sm" text-anchor="middle">{v}</text>
+			</g>
+		))}
+		{[-30, 0, 30, 60, 85].map((a) => (
+			<g>
+				<line x1={ml - 5} y1={my(a)} x2={ml} y2={my(a)} class="axis"></line>
+				<text x={ml - 8} y={my(a) + 4} class="sm" text-anchor="end">{a}°</text>
+			</g>
+		))}
+		<line x1={ml} y1={my(0)} x2={ml + MW} y2={my(0)} class="zero"></line>
+		<text x={ml + MW / 2} y={mt + MH + 40} class="sm" text-anchor="middle">launch speed (m/s)</text>
+		<text x="14" y={mt + MH / 2} class="sm" text-anchor="middle" transform={`rotate(-90 14 ${mt + MH / 2})`}>launch angle</text>
+		<circle cx={mx(43)} cy={my(36)} r="7" class="dot" data-dot></circle>
+	</svg>
+	<div class="ctl">
+		<label>speed <input type="range" min={VMIN} max={VMAX} step="0.5" value="43" data-sv /></label>
+		<label>angle <input type="range" min={AMIN} max={AMAX} step="1" value="36" data-av /></label>
+	</div>
+</div>
+
+<script>
+	// flies the chosen shot and keeps the dot, sliders, path and readout in step
+	document.querySelectorAll<HTMLElement>("[data-tex]").forEach((root) => {
+		const d = root.dataset;
+		const s = Number(d.s), sl = Number(d.sl), back = Number(d.back), sy0 = Number(d.sy0);
+		const ml = Number(d.ml), mt = Number(d.mt), MW = Number(d.mw), MH = Number(d.mh);
+		const [VMIN, VMAX] = d.v!.split(",").map(Number);
+		const [AMIN, AMAX] = d.a!.split(",").map(Number);
+		const G = 9.81, ALPHA = 0.215, L = 13.4, NETX = L / 2, NETH = 1.55, X0 = L - 1;
+		const HS = d.hs!.split(",").map(Number);
+		const HMAX = Number(d.hmax);
+		let hk = 0;
+		const px = (x: number) => sl + (x + back) * s;
+		const py = (h: number) => sy0 - h * s;
+		type S = [number, number, number, number];
+		const deriv = ([, , vx, vy]: S): S => {
+			const sp = Math.hypot(vx, vy);
+			return [vx, vy, -ALPHA * sp * vx, -G - ALPHA * sp * vy];
+		};
+		const rk4 = (st: S, h: number): S => {
+			const k1 = deriv(st);
+			const k2 = deriv(st.map((v, i) => v + (h / 2) * k1[i]) as S);
+			const k3 = deriv(st.map((v, i) => v + (h / 2) * k2[i]) as S);
+			const k4 = deriv(st.map((v, i) => v + h * k3[i]) as S);
+			return st.map((v, i) => v + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])) as S;
+		};
+		const path = root.querySelector("[data-path]")!;
+		const read = root.querySelector("[data-read]")!;
+		const dot = root.querySelector("[data-dot]")!;
+		const sv = root.querySelector<HTMLInputElement>("[data-sv]")!;
+		const av = root.querySelector<HTMLInputElement>("[data-av]")!;
+		const map = root.querySelector<SVGSVGElement>("[data-map]")!;
+		const draw = () => {
+			const v0 = Number(sv.value), deg = Number(av.value);
+			const a = (deg * Math.PI) / 180;
+			const H0 = HS[hk];
+			let st: S = [X0, H0, -v0 * Math.cos(a), v0 * Math.sin(a)];
+			let t = 0, crossed = false, net = false, lx = NaN, top = H0;
+			const pts: string[] = [`M${px(st[0]).toFixed(1)} ${py(st[1]).toFixed(1)}`];
+			while (t < 8) {
+				const nx = rk4(st, 0.001);
+				if (!crossed && nx[0] <= NETX) {
+					const f = (st[0] - NETX) / (st[0] - nx[0]);
+					const hc = st[1] + f * (nx[1] - st[1]);
+					crossed = true;
+					if (hc < NETH) {
+						net = true;
+						pts.push(`L${px(NETX).toFixed(1)} ${py(hc).toFixed(1)}`);
+						break;
+					}
+				}
+				if (nx[1] <= 0) {
+					const f = st[1] / (st[1] - nx[1]);
+					lx = st[0] + f * (nx[0] - st[0]);
+					t += f * 0.001;
+					pts.push(`L${px(lx).toFixed(1)} ${py(0).toFixed(1)}`);
+					break;
+				}
+				st = nx;
+				t += 0.001;
+				top = Math.max(top, st[1]);
+				if (Math.round(t * 1000) % 10 === 0) pts.push(`L${px(st[0]).toFixed(1)} ${py(st[1]).toFixed(1)}`);
+			}
+			const ok = !net && crossed && lx >= 0 && top <= HMAX;
+			path.setAttribute("d", pts.join(""));
+			path.classList.toggle("bad", !ok);
+			let what: string;
+			if (net) what = "hits the net";
+			else if (top > HMAX) what = `peaks at ${top.toFixed(1)} m, above ${HMAX} m`;
+			else if (!crossed) what = `lands ${(X0 - lx).toFixed(1)} m in front of me, short of the net`;
+			else if (lx < 0) what = `lands ${(-lx).toFixed(1)} m past the baseline`;
+			else what = `lands ${lx.toFixed(1)} m in front of the baseline after ${t.toFixed(2)} s, peaking at ${top.toFixed(1)} m`;
+			read.textContent = `${v0.toFixed(1)} m/s at ${deg}°: ${what}`;
+			read.classList.toggle("bad", !ok);
+			dot.setAttribute("cx", String(ml + ((v0 - VMIN) / (VMAX - VMIN)) * MW));
+			dot.setAttribute("cy", String(mt + ((AMAX - deg) / (AMAX - AMIN)) * MH));
+		};
+		const pick = (e: PointerEvent) => {
+			const p = map.createSVGPoint();
+			p.x = e.clientX;
+			p.y = e.clientY;
+			const q = p.matrixTransform(map.getScreenCTM()!.inverse());
+			const v = VMIN + ((q.x - ml) / MW) * (VMAX - VMIN);
+			const a = AMAX - ((q.y - mt) / MH) * (AMAX - AMIN);
+			sv.value = String(Math.min(VMAX, Math.max(VMIN, Math.round(v * 2) / 2)));
+			av.value = String(Math.min(AMAX, Math.max(AMIN, Math.round(a))));
+			draw();
+		};
+		let down = false;
+		map.addEventListener("pointerdown", (e) => {
+			down = true;
+			map.setPointerCapture(e.pointerId);
+			pick(e);
+		});
+		map.addEventListener("pointermove", (e) => down && pick(e));
+		map.addEventListener("pointerup", () => (down = false));
+		root.querySelectorAll<HTMLButtonElement>("[data-h]").forEach((b) =>
+			b.addEventListener("click", () => {
+				hk = Number(b.dataset.h);
+				root.querySelectorAll<HTMLButtonElement>("[data-h]").forEach((c) => c.setAttribute("aria-pressed", String(c === b)));
+				root.querySelectorAll<SVGPathElement>("[data-region]").forEach((r) => (r.style.display = Number(r.dataset.region) === hk ? "" : "none"));
+				root.querySelector("[data-start]")!.setAttribute("cy", String(py(HS[hk])));
+				draw();
+			}),
+		);
+		sv.addEventListener("input", draw);
+		av.addEventListener("input", draw);
+		draw();
+	});
+</script>
+
+<style is:global>
+	.tex {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.tex svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+	.tex .map {
+		max-width: 560px;
+		touch-action: none;
+		cursor: crosshair;
+	}
+	.tex .axis {
+		stroke: #64748b;
+		stroke-width: 1.2;
+	}
+	.tex .floor {
+		stroke: #334155;
+		stroke-width: 2;
+	}
+	.tex .net {
+		stroke: #334155;
+		stroke-width: 3;
+	}
+	.tex .robot {
+		fill: rgba(37, 99, 235, 0.35);
+	}
+	.tex .me {
+		fill: rgba(217, 119, 6, 0.35);
+	}
+	.tex .start {
+		fill: #d97706;
+	}
+	.tex .path {
+		fill: none;
+		stroke: #16a34a;
+		stroke-width: 2.4;
+		stroke-linecap: round;
+	}
+	.tex .path.bad {
+		stroke: #dc2626;
+	}
+	.tex .frame {
+		fill: #f8fafc;
+		stroke: #cbd5e1;
+	}
+	.tex .ok {
+		fill: rgba(22, 163, 74, 0.35);
+	}
+	.tex .cap {
+		stroke: #dc2626;
+		stroke-width: 1.2;
+		stroke-dasharray: 5 4;
+	}
+	.tex .zero {
+		stroke: #cbd5e1;
+		stroke-dasharray: 3 4;
+	}
+	.tex .dot {
+		fill: #fff;
+		stroke: #0f172a;
+		stroke-width: 2.5;
+	}
+	.tex .sm {
+		font: 13px "Work Sans", sans-serif;
+		fill: #475569;
+	}
+	/* fixed height so a longer or shorter readout never moves the map and sliders under the pointer */
+	.tex .read {
+		margin: 6px 0 8px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		font: 600 14px/20px ui-monospace, Menlo, Consolas, monospace;
+		color: #15803d;
+	}
+	.tex .read.bad {
+		color: #b91c1c;
+	}
+	.tex .tog {
+		display: flex;
+		justify-content: center;
+		gap: 8px;
+		margin: 8px 0 0;
+	}
+	.tex .tog button {
+		font: 600 13px ui-monospace, Menlo, Consolas, monospace;
+		padding: 5px 12px;
+		border: 1px solid #cbd5e1;
+		background: #f8fafc;
+		color: #475569;
+		cursor: pointer;
+	}
+	.tex .tog button[aria-pressed="true"] {
+		background: #00a86b;
+		border-color: #00a86b;
+		color: #fff;
+	}
+	.tex .ctl {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 8px 24px;
+		margin-top: 8px;
+		font: 600 13px ui-monospace, Menlo, Consolas, monospace;
+		color: #475569;
+	}
+	.tex .ctl input {
+		vertical-align: middle;
+		accent-color: #00a86b;
+	}
+	@media (max-width: 560px) {
+		.tex {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 10px 12px;
+		}
+		.tex .sm {
+			font-size: 17px;
+		}
+		.tex .read {
+			height: 60px;
+		}
+	}
+</style>

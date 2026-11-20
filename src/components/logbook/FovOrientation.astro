@@ -1,0 +1,148 @@
+---
+// one camera's field of view from above and from the side, with a toggle between landscape and portrait.
+// angles are the left camera's from the 2026-10-01 calibration (cv2.calibrationMatrixValues on M1):
+// 44.9 degrees across the long side of the sensor, 29.0 across the short side. drawn to scale out to 10 m.
+const H = 44.93;
+const V = 29.04;
+const range = 10;
+const pw = 330;
+const ph = 300;
+const cx = 24;
+const cy = ph / 2 + 10;
+const s = (pw - cx - 50) / range;
+---
+
+<div class="fovo not-prose" data-fovo data-h={H} data-v={V} data-s={s} data-cx={cx} data-cy={cy} data-range={range}>
+	<div class="tog" role="group" aria-label="camera orientation">
+		<button type="button" data-o="landscape" aria-pressed="true">landscape</button>
+		<button type="button" data-o="portrait" aria-pressed="false">portrait</button>
+	</div>
+	<svg viewBox={`0 0 ${2 * pw + 20} ${ph + 20}`} role="img" aria-label="One camera's field of view seen from above and from the side, out to 10 m. In landscape it is 44.9 degrees wide and 29.0 degrees tall; in portrait the two swap.">
+		{[0, 1].map((k) => (
+			<g transform={`translate(${k * (pw + 20)} 0)`}>
+				<rect x="0" y="0" width={pw} height={ph + 20} class="panel"></rect>
+				<text x={pw / 2} y="22" class="ttl" text-anchor="middle">{k ? "side view" : "top view"}</text>
+				<line x1={cx} y1={cy} x2={cx + range * s} y2={cy} class="axis"></line>
+				{[5, 10].map((d) => (
+					<g>
+						<line x1={cx + d * s} y1={cy - 4} x2={cx + d * s} y2={cy + 4} class="axis"></line>
+						<text x={cx + d * s} y={cy + 18} class="sm" text-anchor="middle">{d} m</text>
+					</g>
+				))}
+				<polygon points="" class="wedge" data-wedge={k}></polygon>
+				<path d="" class="ext" data-ext={k}></path>
+				<text x={cx + range * s + 8} y={cy + 4} class="sm" data-extlbl={k}></text>
+				<text x={cx + 30} y={cy - 6} class="ang" data-ang={k}></text>
+				<rect x={cx - 8} y={cy - 6} width="12" height="12" rx="2" class="cam"></rect>
+			</g>
+		))}
+	</svg>
+</div>
+
+<script>
+	// redraws both wedges when the orientation changes
+	document.querySelectorAll<HTMLElement>("[data-fovo]").forEach((root) => {
+		const H = Number(root.dataset.h);
+		const V = Number(root.dataset.v);
+		const s = Number(root.dataset.s);
+		const cx = Number(root.dataset.cx);
+		const cy = Number(root.dataset.cy);
+		const R = Number(root.dataset.range);
+		const draw = (o: string) => {
+			const across = o === "landscape" ? [H, V] : [V, H];
+			[0, 1].forEach((k) => {
+				const a = across[k];
+				const half = Math.tan((a * Math.PI) / 360) * R * s;
+				const x = cx + R * s;
+				root.querySelector(`[data-wedge="${k}"]`)!.setAttribute("points", `${cx},${cy} ${x},${cy - half} ${x},${cy + half}`);
+				root.querySelector(`[data-ext="${k}"]`)!.setAttribute("d", `M${x + 4} ${cy - half}H${x + 10}V${cy + half}H${x + 4}`);
+				const w = (2 * Math.tan((a * Math.PI) / 360) * R).toFixed(1);
+				root.querySelector(`[data-extlbl="${k}"]`)!.textContent = `${w} m`;
+				root.querySelector(`[data-ang="${k}"]`)!.textContent = `${a.toFixed(1)}°`;
+			});
+			root.querySelectorAll<HTMLButtonElement>("[data-o]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.o === o)));
+		};
+		root.querySelectorAll<HTMLButtonElement>("[data-o]").forEach((b) => b.addEventListener("click", () => draw(b.dataset.o!)));
+		draw("landscape");
+	});
+</script>
+
+<style is:global>
+	.fovo {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.fovo svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+	.fovo .tog {
+		display: flex;
+		justify-content: center;
+		gap: 8px;
+		margin-bottom: 10px;
+	}
+	.fovo .tog button {
+		font: 600 13px ui-monospace, Menlo, Consolas, monospace;
+		letter-spacing: 0.04em;
+		padding: 5px 12px;
+		border: 1px solid #cbd5e1;
+		background: #f8fafc;
+		color: #475569;
+		cursor: pointer;
+	}
+	.fovo .tog button[aria-pressed="true"] {
+		background: #00a86b;
+		border-color: #00a86b;
+		color: #fff;
+	}
+	.fovo .panel {
+		fill: #fafafa;
+		stroke: #e2e8f0;
+	}
+	.fovo .axis {
+		stroke: #94a3b8;
+		stroke-width: 1;
+	}
+	.fovo .wedge {
+		fill: rgba(217, 119, 6, 0.14);
+		stroke: #d97706;
+		stroke-width: 1.5;
+	}
+	.fovo .ext {
+		fill: none;
+		stroke: #475569;
+		stroke-width: 1.2;
+	}
+	.fovo .cam {
+		fill: #334155;
+	}
+	.fovo .ttl {
+		font: 600 15px "Work Sans", sans-serif;
+		fill: #334155;
+	}
+	.fovo .sm {
+		font: 13px "Work Sans", sans-serif;
+		fill: #475569;
+	}
+	.fovo .ang {
+		font: 600 14px "Work Sans", sans-serif;
+		fill: #b45309;
+	}
+	@media (max-width: 560px) {
+		.fovo {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 8px 12px;
+		}
+		.fovo .sm {
+			font-size: 17px;
+		}
+	}
+</style>

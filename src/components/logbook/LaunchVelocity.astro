@@ -1,0 +1,262 @@
+---
+// a still 3d drawing of the court in the court frame (x across the court, y up, z toward the net, origin at the robot-side
+// corner) with the birdie at the overhead start point p1 = (1.525, 2.6, 12.40) m and its launch velocity
+// v(0) = v0 (cos t sin p, sin t, -cos t cos p). the arrow is drawn 6 m long, at t = 36 degrees and p = 15 degrees
+// (the widest heading in the sweep). the dashed line is the arrow's shadow on the level plane through the start point,
+// and the three coloured segments are its x, y and z parts. court to bwf dimensions, net 1.55 m at the posts.
+import Birdie from "./Birdie.astro";
+const W = 680;
+const H = 440;
+const YAW = -30;
+const PITCH = 36;
+const L = 13.4;
+const WD = 6.1;
+const NET = L / 2;
+const NETH = 1.55;
+const P1: V3 = [1.525, 2.6, 12.4];
+const T = 36;
+const PSI = 15;
+const AL = 6;
+
+type V3 = [number, number, number];
+const rad = (d: number) => (d * Math.PI) / 180;
+const raw = ([x, y, z]: V3): [number, number] => {
+	const a = rad(YAW);
+	const b = rad(PITCH);
+	const xr = x * Math.cos(a) - z * Math.sin(a);
+	const zr = x * Math.sin(a) + z * Math.cos(a);
+	const yr = y * Math.cos(b) + xr * Math.sin(b);
+	return [zr, -yr];
+};
+// centre the court and the arrow in the frame
+const box: V3[] = [[0, 0, 0], [WD, 0, 0], [0, 0, L], [WD, 0, L], [1.525 + 6 * Math.cos(rad(36)) * Math.sin(rad(15)), 2.6 + 6 * Math.sin(rad(36)) + 0.8, 12.4 - 6 * Math.cos(rad(36)) * Math.cos(rad(15))], [1.525, 2.6, 13.4]];
+const xs = box.map((p) => raw(p)[0]);
+const ys = box.map((p) => raw(p)[1]);
+const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+const SC = Math.min((W - 90) / (Math.max(...xs) - Math.min(...xs)), (H - 40) / (Math.max(...ys) - Math.min(...ys)));
+const P = (p: V3): [number, number] => {
+	const [x, y] = raw(p);
+	return [W / 2 + SC * (x - cx), H / 2 + SC * (y - cy)];
+};
+const f = (n: number) => n.toFixed(1);
+const line = (pts: V3[]) => pts.map((p, i) => `${i ? "L" : "M"}${P(p).map(f).join(" ")}`).join("");
+const poly = (pts: V3[]) => line(pts) + "z";
+const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mul = (a: V3, k: number): V3 => [a[0] * k, a[1] * k, a[2] * k];
+const head = (from: V3, to: V3, size = 12) => {
+	const [x0, y0] = P(from);
+	const [x1, y1] = P(to);
+	const l = Math.hypot(x1 - x0, y1 - y0);
+	const dx = (x1 - x0) / l;
+	const dy = (y1 - y0) / l;
+	const w = size * 0.45;
+	return `${f(x1)},${f(y1)} ${f(x1 - size * dx - w * dy)},${f(y1 - size * dy + w * dx)} ${f(x1 - size * dx + w * dy)},${f(y1 - size * dy - w * dx)}`;
+};
+const at = (p: V3, dx = 0, dy = 0) => {
+	const [x, y] = P(p);
+	return { x: f(x + dx), y: f(y + dy) };
+};
+
+const t = rad(T);
+const p = rad(PSI);
+const c = Math.cos(t);
+const dir: V3 = [c * Math.sin(p), Math.sin(t), -c * Math.cos(p)];
+const tip = add(P1, mul(dir, AL));
+const sh: V3 = [tip[0], P1[1], tip[2]];
+const zc: V3 = [P1[0], P1[1], tip[2]];
+const ht: V3 = [Math.sin(p), 0, -Math.cos(p)];
+const N = 32;
+const thArc = line(Array.from({ length: N + 1 }, (_, i) => {
+	const a = (t * i) / N;
+	return add(P1, [1.3 * Math.cos(a) * ht[0], 1.3 * Math.sin(a), 1.3 * Math.cos(a) * ht[2]]);
+}));
+const psArc = line(Array.from({ length: N + 1 }, (_, i) => {
+	const a = (p * i) / N;
+	return add(P1, [3.2 * Math.sin(a), 0, -3.2 * Math.cos(a)]);
+}));
+const thMid = add(P1, mul([Math.cos(t / 2) * ht[0], Math.sin(t / 2), Math.cos(t / 2) * ht[2]], 1.65));
+const psMid = add(P1, [3.7 * Math.sin(p / 2), 0, -3.7 * Math.cos(p / 2)]);
+
+// level plane through the start point, around the decomposition
+const lev = poly([[P1[0] - 0.6, P1[1], P1[2] + 0.5], [sh[0] + 0.6, P1[1], P1[2] + 0.5], [sh[0] + 0.6, P1[1], sh[2] - 0.6], [P1[0] - 0.6, P1[1], sh[2] - 0.6]]);
+
+// court lines (bwf): sidelines, singles sidelines, centre line, short and long service lines
+const sOff = (WD - 5.18) / 2;
+const short = 1.98;
+const longD = 0.76;
+const lines: V3[][] = [
+	[[sOff, 0, 0], [sOff, 0, L]],
+	[[WD - sOff, 0, 0], [WD - sOff, 0, L]],
+	[[WD / 2, 0, 0], [WD / 2, 0, NET - short]],
+	[[WD / 2, 0, NET + short], [WD / 2, 0, L]],
+	[[0, 0, NET - short], [WD, 0, NET - short]],
+	[[0, 0, NET + short], [WD, 0, NET + short]],
+	[[0, 0, longD], [WD, 0, longD]],
+	[[0, 0, L - longD], [WD, 0, L - longD]],
+];
+const half = WD / 2;
+const robotStrip = poly([[0, 0, 0], [half, 0, 0], [half, 0, NET], [0, 0, NET]]);
+const meStrip = poly([[0, 0, NET], [half, 0, NET], [half, 0, L], [0, 0, L]]);
+const net = poly([[0, 0, NET], [WD, 0, NET], [WD, NETH, NET], [0, NETH, NET]]);
+const axes: [V3, string, string][] = [
+	[[1.4, 0, 0], "X", "#dc2626"],
+	[[0, 1.4, 0], "Y", "#16a34a"],
+	[[0, 0, 1.4], "Z", "#2563eb"],
+];
+const [bx, by] = P(P1);
+const [vx, vy] = P(tip);
+const birdieRot = (Math.atan2(vy - by, vx - bx) * 180) / Math.PI - 90;
+---
+
+<div class="lvel not-prose">
+	<svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="The court in 3D with the net, the court frame at the robot-side corner, and the birdie at the start point 2.6 m up on my side. An arrow from the birdie shows its launch velocity, 36 degrees above level and 15 degrees off straight down the court, split into its X, Y and Z parts.">
+		<rect x="0" y="0" width={W} height={H} class="panel"></rect>
+		<path d={robotStrip} class="robot"></path>
+		<path d={meStrip} class="me"></path>
+		<path d={poly([[0, 0, 0], [WD, 0, 0], [WD, 0, L], [0, 0, L]])} class="court"></path>
+		{lines.map((l) => <path d={line(l)} class="cl"></path>)}
+		<text {...at([half / 2, 0, NET / 2], 0, 4)} class="tag" text-anchor="middle">robot</text>
+		<text {...at([half / 2, 0, NET + NET / 2], 0, 4)} class="tag" text-anchor="middle">me</text>
+		{axes.map(([e, n, col]) => (
+			<g>
+				<path d={line([[0, 0, 0], e])} stroke={col} class="ax"></path>
+				<polygon points={head([0, 0, 0], e, 10)} fill={col}></polygon>
+				<text {...at(mul(e, 1.25), 0, 5)} class="axl" fill={col} text-anchor="middle">{n}</text>
+			</g>
+		))}
+		<path d={line([[P1[0], 0, P1[2]], P1])} class="drop"></path>
+		<path d={net} class="net"></path>
+		<path d={lev} class="plane"></path>
+		<path d={line([P1, zc])} class="seg" stroke="#2563eb"></path>
+		<path d={line([zc, sh])} class="seg" stroke="#dc2626"></path>
+		<path d={line([sh, tip])} class="seg" stroke="#16a34a"></path>
+		<path d={line([P1, sh])} class="shadow"></path>
+		<path d={thArc} class="arc" stroke="#b45309"></path>
+		<path d={psArc} class="arc" stroke="#7c3aed"></path>
+		<text {...at(thMid, 4, 2)} class="ang" fill="#b45309" text-anchor="middle">θ</text>
+		<text {...at(psMid, -2, -6)} class="ang" fill="#7c3aed" text-anchor="middle">ψ</text>
+		<path d={line([P1, tip])} class="vec"></path>
+		<polygon points={head(P1, tip)} class="vech"></polygon>
+		<text {...at(tip, 0, -14)} class="vl" text-anchor="middle">v(0)</text>
+		<text {...at(add(P1, [0, 0, (tip[2] - P1[2]) * 0.5]), 0, 24)} class="lbl" fill="#2563eb" text-anchor="middle">−v₀ cos θ cos ψ</text>
+		<text {...at(zc, -8, 24)} class="lbl" fill="#dc2626" text-anchor="end">v₀ cos θ sin ψ</text>
+		<text {...at([sh[0], (P1[1] + tip[1]) / 2, sh[2]], -10, 4)} class="lbl" fill="#16a34a" text-anchor="end">v₀ sin θ</text>
+		<g transform={`translate(${f(bx)} ${f(by)}) rotate(${f(birdieRot)}) scale(0.45) translate(0 -30)`}>
+			<Birdie uid="lv" />
+		</g>
+		<text {...at(P1, 10, 30)} class="sm" text-anchor="start">P₁</text>
+	</svg>
+</div>
+
+<style is:global>
+	.lvel {
+		background: #fff;
+		border: 1px solid rgba(0, 168, 107, 0.3);
+		padding: 12px 16px 14px;
+	}
+	.lvel svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-width: 680px;
+		margin: 0 auto;
+	}
+	.lvel .panel {
+		fill: #fafafa;
+		stroke: #e2e8f0;
+	}
+	.lvel .court {
+		fill: none;
+		stroke: #94a3b8;
+		stroke-width: 1.4;
+	}
+	.lvel .cl {
+		fill: none;
+		stroke: #cbd5e1;
+		stroke-width: 1;
+	}
+	.lvel .robot {
+		fill: rgba(37, 99, 235, 0.08);
+	}
+	.lvel .me {
+		fill: rgba(217, 119, 6, 0.09);
+	}
+	.lvel .net {
+		fill: rgba(51, 65, 85, 0.12);
+		stroke: #475569;
+		stroke-width: 1.4;
+	}
+	.lvel .drop {
+		stroke: #94a3b8;
+		stroke-dasharray: 2 4;
+		fill: none;
+	}
+	.lvel .plane {
+		fill: rgba(148, 163, 184, 0.18);
+		stroke: none;
+	}
+	.lvel .ax {
+		stroke-width: 2.5;
+		fill: none;
+	}
+	.lvel .seg {
+		stroke-width: 4;
+		stroke-linecap: round;
+		fill: none;
+	}
+	.lvel .shadow {
+		stroke: #475569;
+		stroke-width: 1.6;
+		stroke-dasharray: 6 4;
+		fill: none;
+	}
+	.lvel .arc {
+		fill: none;
+		stroke-width: 1.8;
+	}
+	.lvel .ang {
+		font: 600 18px "Work Sans", sans-serif;
+	}
+	.lvel text {
+		paint-order: stroke;
+		stroke: #fafafa;
+		stroke-width: 4px;
+		stroke-linejoin: round;
+	}
+	.lvel .vec {
+		stroke: #0f172a;
+		stroke-width: 3;
+		fill: none;
+	}
+	.lvel .vech {
+		fill: #0f172a;
+	}
+	.lvel .vl {
+		font: 700 16px "Work Sans", sans-serif;
+		fill: #0f172a;
+	}
+	.lvel .axl {
+		font: 700 14px "Work Sans", sans-serif;
+	}
+	.lvel .tag {
+		font: 600 13px "Work Sans", sans-serif;
+		fill: #64748b;
+	}
+	.lvel .sm {
+		font: 600 14px "Work Sans", sans-serif;
+		fill: #334155;
+	}
+	.lvel .lbl {
+		font: 600 14px "Work Sans", sans-serif;
+	}
+	@media (max-width: 560px) {
+		.lvel {
+			margin-left: -32px;
+			margin-right: -32px;
+			border-left: 0;
+			border-right: 0;
+			padding: 10px 8px 12px;
+		}
+	}
+</style>
